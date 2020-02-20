@@ -1,3 +1,4 @@
+CELLSIZE = 256
 KEYLISTLEN = 16
 
 class KeyList:
@@ -37,48 +38,87 @@ class Page:
 	def __getitem__(self, key):
 		return self.data[key]
 
-DK_STATE, DK_TIME, DK_IP, DK_CODE, DK_DATA = range(5)
+	def __setitem__(self, key, value):
+		self.data[key] = value
+
+	def __len__(self):
+		return len(self.data)
+
+DK_STATE, DK_TIME, DK_IP, DK_CODE, DK_POINTER, DK_DATA = range(6)
 DS_ACTIVE, DS_WAITING = range(2)
 
 class Domain:
-	def __init__(self, time_meter_key, codepagekey, datapagekey):
+	def __init__(self, kf, time_meter_key, codepagekey, datapagekey):
 		self.keys = KeyList()
 		self.keys[DK_STATE] = Key(0)#STATE
 		self.keys[DK_TIME] = time_meter_key
 		self.keys[DK_IP] = Key(0)#IP
 		self.keys[DK_CODE] = codepagekey
+		self.keys[DK_POINTER] = Key(0)#POINTER
 		self.keys[DK_DATA] = datapagekey
+
+		# Assume immutable code? Or update on codepagekey change
+		codepage = kf.get_page(codepagekey)
+
+		self.jmpmap = {}
+		jmplst = []
+		for ci, cd in enumerate(codepage):
+			c = SYMBOLS[cd]
+			if c == "[":
+				jmplst.append(ci)
+			elif c == "]":
+				if len(jmplst) == 0:
+					break
+				matching = jmplst.pop(-1)
+				self.jmpmap[ci] = matching
+				self.jmpmap[matching] = ci + 1
 
 class KeyFuck:
 	def __init__(self):
-		self.domains = []
-		self.pages = []
+		self.ids = 0
+		self.domains = {}
+		self.pages = {}
 		self.prime_time_meter = MeterKey([None, None, -1])
 		self.prime_memory_meter = MeterKey([None, None, -1])
 
+	def create_id(self):
+		#should use dict with globally unique id, in case pages get deleted
+		self.ids += 1
+		return self.ids
+
 	def create_page(self, memory_meter_key):
 		page = Page(memory_meter_key)
-		#should use dict with globally unique id, in case pages get deleted
-		pagekey = PageKey(len(self.pages))
-		self.pages.append(page)
+		pagekey = PageKey(self.create_id())
+		self.pages[pagekey.value] = page
 		return pagekey
 
 	def get_page(self, pagekey):
 		assert isinstance(pagekey, PageKey)
 		return self.pages[pagekey.value]
 
-	def create_domain(self, time_meter_key, memory_meter_key):
+	def create_domain(self, time_meter_key, memory_meter_key, code=None):
 		codepagekey = self.create_page(memory_meter_key)
 		datapagekey = self.create_page(memory_meter_key)
 
-		domain = Domain(time_meter_key, codepagekey, datapagekey)
-		domainkey = len(self.domains)
-		self.domains.append(domain)
+		if code is not None:
+			codepage = self.get_page(codepagekey)
+			assert len(code) <= len(codepage)
+			for i in range(len(code)):
+				codepage[i] = code[i]
 
-		return DomainKey(domainkey)
+		domain = Domain(self, time_meter_key, codepagekey, datapagekey)
+		domainkey = DomainKey(self.create_id())
+		self.domains[domainkey.value] = domain
 
-	def run(self):
-		current = self.domains[0]
+		return domainkey
+
+	def get_domain(self, domainkey):
+		assert isinstance(domainkey, DomainKey)
+		return self.domains[domainkey.value]
+
+	def run(self, domainkey):
+
+		current = self.get_domain(domainkey)
 
 		while current.keys[DK_STATE].value == DS_ACTIVE:
 			# do a step
@@ -90,11 +130,62 @@ class KeyFuck:
 			timekey.value[MK_RESOURCES] -= 1
 
 			code = self.get_page(current.keys[DK_CODE])
-			ip = current.keys[DK_IP].value
+			ipkey = current.keys[DK_IP]
+			ip = ipkey.value
 
+			if ip >= len(code):
+				# TODO move up
+				continue
 			instruction = code[ip]
 			print(instruction)
 
+			pointerkey = current.keys[DK_POINTER]
+			pointer = pointerkey.value
+
+			data = self.get_page(current.keys[DK_DATA])
+
+			symbol = SYMBOLS[instruction]
+
+			jump = False
+
+			if symbol == ">":
+				pointerkey.value = (pointer+1)%PAGESIZE
+			elif symbol == "<":
+				pointerkey.value = (pointer-1)%PAGESIZE
+			elif symbol == "+":
+				data[pointer] = (data[pointer]+1)%CELLSIZE
+			elif symbol == "-":
+				data[pointer] = (data[pointer]-1)%CELLSIZE
+			elif symbol == "[":
+				if data[pointer] == 0:
+					#if ip in current.jmpmap:
+					#try: except KeyError
+					ipkey.value = current.jmpmap[ip]
+					jump = True
+			elif symbol == "]":
+				if data[pointer] != 0:
+					ipkey.value = current.jmpmap[ip]
+					jump = True
+
+			if not jump:
+				ipkey.value += 1
+
+from random import choice
+
+SYMBOLS = "><+-[]"
+
+def translate(code):
+	return [SYMBOLS.index(c) for c in code]
+
+def genrandom(length=256):
+	code = ""
+	for i in range(length):
+		code += choice(SYMBOLS)
+	return code
+
+def genstatic():
+	return "+>++[-]<-"
+
 kf = KeyFuck()
-kf.create_domain(kf.prime_time_meter, kf.prime_memory_meter)
-kf.run()
+domainkey = kf.create_domain(kf.prime_time_meter, kf.prime_memory_meter, translate(genstatic()))
+kf.run(domainkey)
