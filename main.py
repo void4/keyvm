@@ -120,13 +120,13 @@ class Domain:
 		return keys[keyindex]
 
 class KeyFuck:
-	def __init__(self):
+	def __init__(self, timelimit=-1, memorylimit=-1):
 		self.ids = 0
 		self.keylists = {}
 		self.domains = {}
 		self.pages = {}
-		self.prime_time_meter = MeterKey([None, None, -1])
-		self.prime_memory_meter = MeterKey([None, None, -1])
+		self.prime_time_meter = MeterKey([None, None, timelimit])
+		self.prime_memory_meter = MeterKey([None, None, memorylimit])
 
 	def create_id(self):
 		#should use dict with globally unique id, in case pages get deleted
@@ -145,6 +145,7 @@ class KeyFuck:
 
 	def create_page(self, memory_meter_key):
 		if not memory_meter_key.use(PAGESIZE):
+			raise AssertionError("NOT IMPLEMENTED")
 			return None
 		page = Page(memory_meter_key)
 		pagekey = PageKey(self.create_id())
@@ -206,6 +207,7 @@ class KeyFuck:
 					color.append("red")
 		df = pd.DataFrame({ 'source':fm, 'target':to, 'color':color})
 		G=nx.from_pandas_edgelist(df, create_using=nx.DiGraph(), edge_attr=True)
+		nx.spring_layout(G)
 		nx.draw(G, with_labels=True, node_size=1500, alpha=0.3, arrows=True)#.values)
 		plt.show()
 
@@ -225,6 +227,10 @@ class KeyFuck:
 		while True:#current.associated(self, DK_STATE).value == DS_ACTIVE:
 			# do a step
 			# Ascend the meter chain
+			# TODO investigate this
+			if current is None:
+				break
+
 			keys = self.get_keylist(current.keylistkey)
 
 			timekey = keys[DK_TIME]
@@ -355,6 +361,8 @@ class KeyFuck:
 
 				if key is not None:
 					wb[wbi] = key.attenuate(option)
+				else:
+					raise AssertionError("FUCK")
 
 			elif symbol == "m":
 				# use "m" to communicate with system? or separate instruction?
@@ -415,7 +423,7 @@ print(PROGRAM)
 
 PROGRAM = PROGRAM.replace("\n", "").replace(" ", "")
 import traceback
-kf = KeyFuck()
+kf = KeyFuck(15000)
 codepagekey = kf.create_page(kf.prime_memory_meter)
 kf.copycode(codepagekey, translate(PROGRAM))
 domainkey = kf.create_domain(kf.prime_time_meter, kf.prime_memory_meter, codepagekey)#genrandom()))
