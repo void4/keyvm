@@ -159,13 +159,14 @@ class KeyFuck:
 
 	def viz(self, keylistkey, depth=0, visited=None):
 		if visited is None:
-			visited = []
+			visited = [keylistkey]
 		keylist = self.get_keylist(keylistkey)
-		print("KeyList", keylistkey.value)
+		prefix = "\t"*depth
+		print(prefix + "KeyList", keylistkey.value)
 		for key in keylist:
-			print("\t"*depth + "|" + str(key))#str(key.__class__))#
-			visited.append(key)
+			print(prefix + "|" + str(key))#str(key.__class__))#
 			if isinstance(key, KeyListKey) and key not in visited:
+				visited.append(key)
 				self.viz(key, depth+1, visited)
 
 	def gviz(self):
