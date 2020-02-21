@@ -7,14 +7,21 @@ class KeyList:
 
 	def __setitem__(self, key, value):
 		assert isinstance(value, Key)
+		if self.data[key] is not None:
+			del self.data[key]
 		self.data[key] = value
 
 	def __getitem__(self, key):
 		return self.data[key]
 
+	def __delitem__(self, key):
+		self.data[key].refs -= 1
+		self.data[key] = None
+
 class Key:
 	def __init__(self, value):
 		self.value = value
+		self.refs = 1#increase on copy, decrease on KeyList delete
 
 class PageKey(Key):
 	pass
@@ -23,6 +30,11 @@ class DomainKey(Key):
 	pass
 
 class KeyListKey(Key):
+	# def __setattr__(self, name, value):
+	#	if name == "refs":
+	# delete corresponding keylist? or really only if meter is deleted?
+	# -> keylist could reference itself, so prob yeah, since only meters are guaranteed to be hierarchical
+	# should meter key grant access to everything?
 	pass
 
 # Parent meter, controlling domain, resources
@@ -31,7 +43,7 @@ class MeterKey(Key):
 
 MK_PARENT, MK_CONTROLLER, MK_RESOURCES = range(3)
 
-PAGESIZE = 256
+PAGESIZE = 16
 
 class Page:
 	def __init__(self, parentmeter):
@@ -47,7 +59,7 @@ class Page:
 	def __len__(self):
 		return len(self.data)
 
-DK_STATE, DK_TIME, DK_IP, DK_CODE, DK_POINTER, DK_DATA = range(6)
+DK_STATE, DK_TIME, DK_IP, DK_CODE, DK_POINTER, DK_DATA, DK_INBOX, DK_WORKBENCH, DK_WORKBENCH2 = range(9)
 DS_ACTIVE, DS_WAITING = range(2)
 
 class Domain:
@@ -61,6 +73,8 @@ class Domain:
 		keys[DK_CODE] = codepagekey
 		keys[DK_POINTER] = Key(0)#POINTER
 		keys[DK_DATA] = datapagekey
+		keys[DK_WORKBENCH] = self.keylistkey
+		keys[DK_WORKBENCH2] = self.keylistkey
 
 		# Assume immutable code? Or update on codepagekey change
 		codepage = kf.get_page(codepagekey)
@@ -189,6 +203,44 @@ class KeyFuck:
 					ipkey.value = current.jmpmap[ip]
 					jump = True
 
+			elif symbol == "r":
+				# root, reset workbench to domain keylistkey
+				keys[DK_WORKBENCH] = current.keylistkey
+
+			elif symbol == "t":
+				# Traverse workbench down
+				assert data[pointer] < 16
+				key = keys[data[pointer]]
+				assert isinstance(key, KeyListKey)
+				keys[DK_WORKBENCH] = key
+
+			elif symbol == "l":
+				# Create new KeyList in workbench
+				assert data[pointer] < 16
+				newkeylistkey = self.create_keylist()
+				keys[DK_WORKBENCH][data[pointer]] = newkeylistkey
+
+			elif symbol == "c":
+				# Copy key
+				wb1 = self.get_keylist(keys[DK_WORKBENCH])
+				wb2 = self.get_keylist(keys[DK_WORKBENCH2])
+
+				indices = data[pointer]
+				wb1i = (indices & 0xf)
+				wb2i = ((indices >> 4) & 0xf)
+
+				wb2[wb2i] = wb1[wb1i]
+
+				#include attenuate here?
+
+			elif symbol == "s":
+				keys[DK_WORKBENCH], keys[DK_WORKBENCH2] = keys[DK_WORKBENCH2], keys[DK_WORKBENCH]
+
+			elif symbol == "a":
+				# Attenuate key
+				# how to weaken meter key by certain amount? if CELLSIZE=256, this might suck
+				pass
+
 			elif symbol == "m":
 				# use "m" to communicate with system? or separate instruction?
 				# system invocations (and their effects) have to obey resource constraints
@@ -200,7 +252,14 @@ class KeyFuck:
 					# System call
 					pass
 				else:
-					current = self.get_domain(domainkey)
+					sender = current
+					receiver = self.get_domain(domainkey)
+
+					# use DK_WORKBENCH2 as DK_INBOX!, also as outbox?
+					#		keys[DK_INBOX] = kf.create_keylist()
+					receiver.keys[DK_WORKBENCH2] = sender.keys[DK_WORKBENCH2]
+
+					current = receiver
 
 			if not jump:
 				ipkey.value += 1
