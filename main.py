@@ -220,11 +220,13 @@ class KeyFuck:
 
 		current = self.get_domain(domainkey)
 
-		keys = self.get_keylist(current.keylistkey)
+
 
 		while True:#current.associated(self, DK_STATE).value == DS_ACTIVE:
 			# do a step
 			# Ascend the meter chain
+			keys = self.get_keylist(current.keylistkey)
+
 			timekey = keys[DK_TIME]
 			chain = [timekey]
 
@@ -359,27 +361,30 @@ class KeyFuck:
 				# system invocations (and their effects) have to obey resource constraints
 				# SystemKey? Available anywhere? Like complete memory override? Or only local, relative effects?
 				messagekeylistkey = keys[data[pointer]]
-				messagekeylist = self.get_keys(messagekeylistkey)
+				messagekeylist = self.get_keylist(messagekeylistkey)
 				domainkey = messagekeylist[0]
 				if domainkey is None:
-					# System call
+					print("System call")
 					pass
 				else:
-					sender = current
 					receiver = self.get_domain(domainkey)
 
 					# use DK_WORKBENCH2 as DK_INBOX!, also as outbox?
 					#		keys[DK_INBOX] = kf.create_keylist()
-					receiver.keys[DK_WORKBENCH2] = sender.keys[DK_WORKBENCH2]
-
+					receiverkeys = self.get_keylist(receiver.keylistkey)
+					receiverkeys[DK_WORKBENCH2] = keys[DK_WORKBENCH2]
+					print("SENDING")
 					current = receiver
+
+			elif symbol == "h":
+				break
 
 			if not jump:
 				ipkey.value += 1
 
 from random import choice
 
-SYMBOLS = "><+-[]²½rtlcdsam"
+SYMBOLS = "h><+-[]²½rtlcdsam"
 
 def translate(code):
 	return [SYMBOLS.index(c) for c in code]
@@ -396,6 +401,9 @@ source = """7l
 >c(8,1)
 >c(3,2)
 d(9)
+>7l
+>c(9,0)
+>m(7)
 """
 
 
@@ -416,9 +424,11 @@ try:
 except AssertionError as e:
 	print(e)
 	traceback.print_exc()
+except KeyboardInterrupt:
+	pass
 domain = kf.get_domain(domainkey)
 datapagekey = domain.associated(kf, DK_DATA)
 data = kf.get_page(datapagekey).data
 #print([bin(d)[2:].zfill(8) for d in data])
 kf.viz(domain.keylistkey)
-#kf.gviz()
+kf.gviz()
