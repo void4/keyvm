@@ -85,8 +85,8 @@ DK_STATE, DK_TIME, DK_IP, DK_CODE, DK_POINTER, DK_DATA, DK_WORKBENCH, DK_WORKBEN
 DS_ACTIVE, DS_WAITING = range(2)
 
 class Domain:
-	def __init__(self, kf, time_meter_key, memory_meter_key, codepagekey, datapagekey):
-		self.keylistkey = kf.create_keylist()#masterkey
+	def __init__(self, keylistkey, time_meter_key, memory_meter_key, codepagekey, datapagekey):
+		self.keylistkey = keylistkey
 
 		keys = kf.get_keylist(self.keylistkey)
 		keys[DK_STATE] = Key(0)#STATE
@@ -133,14 +133,14 @@ class KeyFuck:
 		self.ids += 1
 		return self.ids
 
-	def create_keylist(self):
+	def create_keylist(self):#TODO memory_meter_key
 		keylist = KeyList()
 		keylistkey = KeyListKey(self.create_id())
 		self.keylists[keylistkey.value] = keylist
 		return keylistkey
 
 	def get_keylist(self, keylistkey):
-		assert isinstance(keylistkey, KeyListKey)
+		assert isinstance(keylistkey, KeyListKey), type(keylistkey)
 		return self.keylists[keylistkey.value]
 
 	def create_page(self, memory_meter_key):
@@ -155,12 +155,14 @@ class KeyFuck:
 		assert isinstance(pagekey, PageKey)
 		return self.pages[pagekey.value]
 
-	def create_domain(self, time_meter_key, memory_meter_key, codepagekey):
+	def create_domain(self, time_meter_key, memory_meter_key, codepagekey, keylistkey=None):
+		if keylistkey is None:
+			keylistkey = self.create_keylist()#masterkey
 		datapagekey = self.create_page(memory_meter_key)
 
 		#TODO if codepagekey is None or datapagekey is None, revert
 
-		domain = Domain(self, time_meter_key, memory_meter_key, codepagekey, datapagekey)
+		domain = Domain(keylistkey, time_meter_key, memory_meter_key, codepagekey, datapagekey)
 		domainkey = DomainKey(self.create_id())
 		self.domains[domainkey.value] = domain
 
@@ -328,8 +330,9 @@ class KeyFuck:
 			elif symbol == "d":
 				# Make this also a 'm' message?
 				# Create new domain
-				wb2 = self.get_keylist(keys[DK_WORKBENCH2])
-				domainkey = self.create_domain(wb2[0], wb2[1], wb2[2])
+				keylistkey = keys[DK_WORKBENCH2]
+				wb2 = self.get_keylist(keylistkey)
+				domainkey = self.create_domain(wb2[0], wb2[1], wb2[2], keylistkey)
 				wb1 = self.get_keylist(keys[DK_WORKBENCH])
 				wb1[data[pointer]] = domainkey
 
