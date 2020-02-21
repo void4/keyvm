@@ -200,14 +200,31 @@ class KeyFuck:
 
 		keys = self.get_keylist(current.keylistkey)
 
-		while current.associated(self, DK_STATE).value == DS_ACTIVE:
+		while True:#current.associated(self, DK_STATE).value == DS_ACTIVE:
 			# do a step
+			# Ascend the meter chain
 			timekey = keys[DK_TIME]
-			if timekey.value[MK_RESOURCES] <= 0 and timekey.value[MK_PARENT] is not None:
-				current = timekey.value[MK_PARENT]
-				continue
+			chain = [timekey]
 
-			timekey.value[MK_RESOURCES] -= 1
+			while True:
+				parentkey = chain[-1].value[MK_PARENT]
+				if parentkey is None:
+					break
+				chain.append(parentkey)
+
+			print([str(k) for k in chain])
+
+			STEPCOST = 1
+			for meterkey in chain[::-1]:
+				if meterkey.value[MK_RESOURCES] <= STEPCOST:
+					parentmeterkey = meterkey.value[MK_PARENT]
+					if parentmeterkey is None:
+						break
+					current = parentmeterkey.value[MK_CONTROLLER]
+					continue
+
+			for meterkey in chain:
+				meterkey.value[MK_RESOURCES] -= STEPCOST
 
 			code = self.get_page(keys[DK_CODE])
 			ipkey = keys[DK_IP]
@@ -333,7 +350,7 @@ def genrandom(length=256):
 		code += choice(SYMBOLS)
 	return code
 
-PROGRAM = "+++++++l"
+PROGRAM = "+++++++l>+"
 
 
 kf = KeyFuck()
