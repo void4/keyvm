@@ -18,6 +18,9 @@ class KeyList:
 		self.data[key].refs -= 1
 		self.data[key] = None
 
+	def __iter__(self):
+		return iter(self.data)
+
 class Key:
 	def __init__(self, value):
 		self.value = value
@@ -59,7 +62,7 @@ class Page:
 	def __len__(self):
 		return len(self.data)
 
-DK_STATE, DK_TIME, DK_IP, DK_CODE, DK_POINTER, DK_DATA, DK_INBOX, DK_WORKBENCH, DK_WORKBENCH2 = range(9)
+DK_STATE, DK_TIME, DK_IP, DK_CODE, DK_POINTER, DK_DATA, DK_WORKBENCH, DK_WORKBENCH2 = range(8)
 DS_ACTIVE, DS_WAITING = range(2)
 
 class Domain:
@@ -150,6 +153,16 @@ class KeyFuck:
 		assert isinstance(domainkey, DomainKey)
 		return self.domains[domainkey.value]
 
+	def viz(self, keylistkey, depth=0, visited=None):
+		if visited is None:
+			visited = []
+		keylist = self.get_keylist(keylistkey)
+		for key in keylist:
+			print("\t"*depth + str(key.__class__))#str(key)
+			visited.append(key)
+			if isinstance(key, KeyListKey) and key not in visited:
+				self.viz(key, depth+1, visited)
+
 	def run(self, domainkey):
 
 		current = self.get_domain(domainkey)
@@ -171,7 +184,9 @@ class KeyFuck:
 
 			if ip >= len(code):
 				# TODO move up
-				break
+				if timekey.value[MK_PARENT] is None:
+					break
+				continue
 			instruction = code[ip]
 
 			pointerkey = keys[DK_POINTER]
@@ -192,6 +207,10 @@ class KeyFuck:
 				data[pointer] = (data[pointer]+1)%CELLSIZE
 			elif symbol == "-":
 				data[pointer] = (data[pointer]-1)%CELLSIZE
+			elif symbol == "²":
+				data[pointer] = (data[pointer]<<1)%CELLSIZE
+			elif symbol == "½":
+				data[pointer] = (data[pointer]>>1)%CELLSIZE
 			elif symbol == "[":
 				if data[pointer] == 0:
 					#if ip in current.jmpmap:
@@ -283,6 +302,8 @@ def genstatic():
 kf = KeyFuck()
 domainkey = kf.create_domain(kf.prime_time_meter, kf.prime_memory_meter, translate(genstatic()))
 kf.run(domainkey)
-datapagekey = kf.get_domain(domainkey).associated(kf, DK_DATA)
+domain = kf.get_domain(domainkey)
+datapagekey = domain.associated(kf, DK_DATA)
 data = kf.get_page(datapagekey).data
 print(data)
+kf.viz(domain.keylistkey)
