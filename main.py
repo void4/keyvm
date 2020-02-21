@@ -8,9 +8,10 @@ class KeyList:
 		self.data = [None for i in range(KEYLISTLEN)]
 
 	def __setitem__(self, key, value):
-		assert isinstance(value, Key)
+		assert isinstance(value, Key), type(value)
 		if self.data[key] is not None:
-			del self.data[key]
+			#del self.data[key]#this actually deletes list entry!
+			self.__delitem__(key)
 		self.data[key] = value
 
 	def __getitem__(self, key):
@@ -80,11 +81,11 @@ class Page:
 	def __len__(self):
 		return len(self.data)
 
-DK_STATE, DK_TIME, DK_IP, DK_CODE, DK_POINTER, DK_DATA, DK_WORKBENCH, DK_WORKBENCH2 = range(8)
+DK_STATE, DK_TIME, DK_IP, DK_CODE, DK_POINTER, DK_DATA, DK_WORKBENCH, DK_WORKBENCH2, DK_MEMORY = range(9)
 DS_ACTIVE, DS_WAITING = range(2)
 
 class Domain:
-	def __init__(self, kf, time_meter_key, codepagekey, datapagekey):
+	def __init__(self, kf, time_meter_key, memory_meter_key, codepagekey, datapagekey):
 		self.keylistkey = kf.create_keylist()#masterkey
 
 		keys = kf.get_keylist(self.keylistkey)
@@ -96,6 +97,7 @@ class Domain:
 		keys[DK_DATA] = datapagekey
 		keys[DK_WORKBENCH] = self.keylistkey
 		keys[DK_WORKBENCH2] = self.keylistkey
+		keys[DK_MEMORY] = memory_meter_key
 
 		# Assume immutable code? Or update on codepagekey change
 		codepage = kf.get_page(codepagekey)
@@ -153,19 +155,12 @@ class KeyFuck:
 		assert isinstance(pagekey, PageKey)
 		return self.pages[pagekey.value]
 
-	def create_domain(self, time_meter_key, memory_meter_key, code=None):
-		codepagekey = self.create_page(memory_meter_key)
+	def create_domain(self, time_meter_key, memory_meter_key, codepagekey):
 		datapagekey = self.create_page(memory_meter_key)
 
 		#TODO if codepagekey is None or datapagekey is None, revert
 
-		if code is not None:
-			codepage = self.get_page(codepagekey)
-			assert len(code) <= len(codepage)
-			for i in range(len(code)):
-				codepage[i] = code[i]
-
-		domain = Domain(self, time_meter_key, codepagekey, datapagekey)
+		domain = Domain(self, time_meter_key, memory_meter_key, codepagekey, datapagekey)
 		domainkey = DomainKey(self.create_id())
 		self.domains[domainkey.value] = domain
 
@@ -212,7 +207,14 @@ class KeyFuck:
 		nx.draw(G, with_labels=True, node_size=1500, alpha=0.3, arrows=True)#.values)
 		plt.show()
 
-	def run(self, domainkey):
+
+	def copycode(self, codepagekey, code):
+		codepage = self.get_page(codepagekey)
+		assert len(code) <= len(codepage)
+		for i in range(len(code)):
+			codepage[i] = code[i]
+
+	def run(self, domainkey, debug=False):
 
 		current = self.get_domain(domainkey)
 
@@ -224,13 +226,16 @@ class KeyFuck:
 			timekey = keys[DK_TIME]
 			chain = [timekey]
 
+			if debug:
+				self.viz(current.keylistkey)
+
 			while True:
 				parentkey = chain[-1].value[MK_PARENT]
 				if parentkey is None:
 					break
 				chain.append(parentkey)
 
-			print([str(k) for k in chain])
+			#print([str(k) for k in chain])
 
 			STEPCOST = 1
 			for meterkey in chain[::-1]:
@@ -259,6 +264,8 @@ class KeyFuck:
 			pointer = pointerkey.value
 
 			data = self.get_page(keys[DK_DATA])
+
+			#print(data.data)
 
 			symbol = SYMBOLS[instruction]
 			print(symbol)
@@ -303,8 +310,8 @@ class KeyFuck:
 				# Create new KeyList in workbench
 				assert data[pointer] < 16
 				newkeylistkey = self.create_keylist()
-				wb1 = self.get_keylist(keys[DK_WORKBENCH])
-				wb1[data[pointer]] = newkeylistkey
+				wb = self.get_keylist(keys[DK_WORKBENCH])
+				wb[data[pointer]] = newkeylistkey
 
 			elif symbol == "c":
 				# Copy key
@@ -314,15 +321,17 @@ class KeyFuck:
 				indices = data[pointer]
 				wb1i = ((indices >> 4) & 0xf)
 				wb2i = (indices & 0xf)
-
+				#print(wb1[wb1i])
 				wb2[wb2i] = wb1[wb1i]
 
 				#include attenuate here?
 			elif symbol == "d":
 				# Make this also a 'm' message?
 				# Create new domain
-				wb2 = keys[DK_WORKBENCH2]
-				self.create_domain(wb2[0], wb2[1], wb2[2])
+				wb2 = self.get_keylist(keys[DK_WORKBENCH2])
+				domainkey = self.create_domain(wb2[0], wb2[1], wb2[2])
+				wb1 = self.get_keylist(keys[DK_WORKBENCH])
+				wb1[data[pointer]] = domainkey
 
 			elif symbol == "s":
 				keys[DK_WORKBENCH], keys[DK_WORKBENCH2] = keys[DK_WORKBENCH2], keys[DK_WORKBENCH]
@@ -332,15 +341,15 @@ class KeyFuck:
 				# how to weaken meter key by certain amount? if CELLSIZE=256, this might suck
 				# attenuate in place or by copy/transfer?
 				# for now, in place
-				wb1 = self.get_keylist(keys[DK_WORKBENCH])
+				wb = self.get_keylist(keys[DK_WORKBENCH2])
 				indices = data[pointer]
-				wbi1 = ((indices >> 4) & 0xf)
+				wbi = ((indices >> 4) & 0xf)
 				option = (indices & 0xf)
 
-				key = wb1[wbi1]
+				key = wb[wbi]
 
 				if key is not None:
-					wb1[wbi1] = key.attenuate(option)
+					wb[wbi] = key.attenuate(option)
 
 			elif symbol == "m":
 				# use "m" to communicate with system? or separate instruction?
@@ -378,20 +387,35 @@ def genrandom(length=256):
 		code += choice(SYMBOLS)
 	return code
 
-PROGRAM = """+++++++l
->²²²²+²²²²c
-s
->²²²²²²²+²a"""
+source = """7l
+>c(1,0)
+>a(0,2)
+>c(8,1)
+>c(3,2)
+d(9)
+"""
+
+
+from utils import asm
+
+
+PROGRAM = asm(source)
+print(PROGRAM)
 
 PROGRAM = PROGRAM.replace("\n", "").replace(" ", "")
-
-
+import traceback
 kf = KeyFuck()
-domainkey = kf.create_domain(kf.prime_time_meter, kf.prime_memory_meter, translate(PROGRAM))#genrandom()))
-kf.run(domainkey)
+codepagekey = kf.create_page(kf.prime_memory_meter)
+kf.copycode(codepagekey, translate(PROGRAM))
+domainkey = kf.create_domain(kf.prime_time_meter, kf.prime_memory_meter, codepagekey)#genrandom()))
+try:
+	kf.run(domainkey, False)
+except AssertionError as e:
+	print(e)
+	traceback.print_exc()
 domain = kf.get_domain(domainkey)
 datapagekey = domain.associated(kf, DK_DATA)
 data = kf.get_page(datapagekey).data
-print(data)
+#print([bin(d)[2:].zfill(8) for d in data])
 kf.viz(domain.keylistkey)
 #kf.gviz()
