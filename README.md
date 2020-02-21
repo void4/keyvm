@@ -36,3 +36,5 @@ how to transfer data between two pages? memcpy? or just move/copy through code f
 Just use memory-limit, not memory-time
 -> do not delete time=0 domains, if they still have memory
 -> manual deletion, no automatic garbage collection except unreferenced keys
+
+keyspace. the final frontier.

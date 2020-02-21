@@ -158,10 +158,35 @@ class KeyFuck:
 			visited = []
 		keylist = self.get_keylist(keylistkey)
 		for key in keylist:
-			print("\t"*depth + str(key.__class__))#str(key)
+			print("\t"*depth + str(key))#str(key.__class__))#
 			visited.append(key)
 			if isinstance(key, KeyListKey) and key not in visited:
 				self.viz(key, depth+1, visited)
+
+	def gviz(self):
+		import pandas as pd
+		import numpy as np
+		import networkx as nx
+		import matplotlib.pyplot as plt
+		fm = []
+		to = []
+		color = []
+		for klid, keylist in self.keylists.items():
+			for key in keylist:
+				if key is None:
+					continue
+				fm.append(key)
+				to.append(klid)
+				color.append("black")
+				if isinstance(key, KeyListKey):
+					# this should be a different color at least
+					fm.append(key)
+					to.append(key.value)
+					color.append("red")
+		df = pd.DataFrame({ 'source':fm, 'target':to, 'color':color})
+		G=nx.from_pandas_edgelist(df, create_using=nx.DiGraph(), edge_attr=True)
+		nx.draw(G, with_labels=True, node_size=1500, alpha=0.3, arrows=True)#.values)
+		plt.show()
 
 	def run(self, domainkey):
 
@@ -237,7 +262,8 @@ class KeyFuck:
 				# Create new KeyList in workbench
 				assert data[pointer] < 16
 				newkeylistkey = self.create_keylist()
-				keys[DK_WORKBENCH][data[pointer]] = newkeylistkey
+				wb1 = self.get_keylist(keys[DK_WORKBENCH])
+				wb1[data[pointer]] = newkeylistkey
 
 			elif symbol == "c":
 				# Copy key
@@ -251,6 +277,11 @@ class KeyFuck:
 				wb2[wb2i] = wb1[wb1i]
 
 				#include attenuate here?
+			elif symbol == "d":
+				# Make this also a 'm' message?
+				# Create new domain
+				wb2 = keys[DK_WORKBENCH2]
+				self.create_domain(wb2[0], wb2[1], wb2[2])
 
 			elif symbol == "s":
 				keys[DK_WORKBENCH], keys[DK_WORKBENCH2] = keys[DK_WORKBENCH2], keys[DK_WORKBENCH]
@@ -285,7 +316,7 @@ class KeyFuck:
 
 from random import choice
 
-SYMBOLS = "><+-[]"
+SYMBOLS = "><+-[]rtlcdsam"
 
 def translate(code):
 	return [SYMBOLS.index(c) for c in code]
@@ -296,14 +327,15 @@ def genrandom(length=256):
 		code += choice(SYMBOLS)
 	return code
 
-def genstatic():
-	return "+>++[-]<+"
+PROGRAM = "+++++++l"
+
 
 kf = KeyFuck()
-domainkey = kf.create_domain(kf.prime_time_meter, kf.prime_memory_meter, translate(genstatic()))
+domainkey = kf.create_domain(kf.prime_time_meter, kf.prime_memory_meter, translate(PROGRAM))#genrandom()))
 kf.run(domainkey)
 domain = kf.get_domain(domainkey)
 datapagekey = domain.associated(kf, DK_DATA)
 data = kf.get_page(datapagekey).data
 print(data)
 kf.viz(domain.keylistkey)
+#kf.gviz()
