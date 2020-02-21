@@ -26,6 +26,10 @@ class Key:
 		self.value = value
 		self.refs = 1#increase on copy, decrease on KeyList delete
 
+	def __str__(self):
+		#[%i]" % self.refs
+		return "🔑 " + str(self.__class__).split(".")[-1][:-2] + ": " + str(self.value)
+
 class PageKey(Key):
 	pass
 
@@ -157,8 +161,9 @@ class KeyFuck:
 		if visited is None:
 			visited = []
 		keylist = self.get_keylist(keylistkey)
+		print("KeyList", keylistkey.value)
 		for key in keylist:
-			print("\t"*depth + str(key))#str(key.__class__))#
+			print("\t"*depth + "|" + str(key))#str(key.__class__))#
 			visited.append(key)
 			if isinstance(key, KeyListKey) and key not in visited:
 				self.viz(key, depth+1, visited)
