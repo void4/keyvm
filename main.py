@@ -22,6 +22,9 @@ class PageKey(Key):
 class DomainKey(Key):
 	pass
 
+class KeyListKey(Key):
+	pass
+
 # Parent meter, controlling domain, resources
 class MeterKey(Key):
 	pass
@@ -49,13 +52,15 @@ DS_ACTIVE, DS_WAITING = range(2)
 
 class Domain:
 	def __init__(self, kf, time_meter_key, codepagekey, datapagekey):
-		self.keys = KeyList()
-		self.keys[DK_STATE] = Key(0)#STATE
-		self.keys[DK_TIME] = time_meter_key
-		self.keys[DK_IP] = Key(0)#IP
-		self.keys[DK_CODE] = codepagekey
-		self.keys[DK_POINTER] = Key(0)#POINTER
-		self.keys[DK_DATA] = datapagekey
+		self.keylistkey = kf.create_keylist()#masterkey
+
+		keys = kf.get_keylist(self.keylistkey)
+		keys[DK_STATE] = Key(0)#STATE
+		keys[DK_TIME] = time_meter_key
+		keys[DK_IP] = Key(0)#IP
+		keys[DK_CODE] = codepagekey
+		keys[DK_POINTER] = Key(0)#POINTER
+		keys[DK_DATA] = datapagekey
 
 		# Assume immutable code? Or update on codepagekey change
 		codepage = kf.get_page(codepagekey)
@@ -73,9 +78,14 @@ class Domain:
 				self.jmpmap[ci] = matching
 				self.jmpmap[matching] = ci + 1
 
+	def associated(self, kf, keyindex):
+		keys = kf.get_keylist(self.keylistkey)
+		return keys[keyindex]
+
 class KeyFuck:
 	def __init__(self):
 		self.ids = 0
+		self.keylists = {}
 		self.domains = {}
 		self.pages = {}
 		self.prime_time_meter = MeterKey([None, None, -1])
@@ -85,6 +95,16 @@ class KeyFuck:
 		#should use dict with globally unique id, in case pages get deleted
 		self.ids += 1
 		return self.ids
+
+	def create_keylist(self):
+		keylist = KeyList()
+		keylistkey = KeyListKey(self.create_id())
+		self.keylists[keylistkey.value] = keylist
+		return keylistkey
+
+	def get_keylist(self, keylistkey):
+		assert isinstance(keylistkey, KeyListKey)
+		return self.keylists[keylistkey.value]
 
 	def create_page(self, memory_meter_key):
 		page = Page(memory_meter_key)
@@ -120,31 +140,33 @@ class KeyFuck:
 
 		current = self.get_domain(domainkey)
 
-		while current.keys[DK_STATE].value == DS_ACTIVE:
+		keys = self.get_keylist(current.keylistkey)
+
+		while current.associated(self, DK_STATE).value == DS_ACTIVE:
 			# do a step
-			timekey = current.keys[DK_TIME]
+			timekey = keys[DK_TIME]
 			if timekey.value[MK_RESOURCES] <= 0 and timekey.value[MK_PARENT] is not None:
 				current = timekey.value[MK_PARENT]
 				continue
 
 			timekey.value[MK_RESOURCES] -= 1
 
-			code = self.get_page(current.keys[DK_CODE])
-			ipkey = current.keys[DK_IP]
+			code = self.get_page(keys[DK_CODE])
+			ipkey = keys[DK_IP]
 			ip = ipkey.value
 
 			if ip >= len(code):
 				# TODO move up
-				continue
+				break
 			instruction = code[ip]
-			print(instruction)
 
-			pointerkey = current.keys[DK_POINTER]
+			pointerkey = keys[DK_POINTER]
 			pointer = pointerkey.value
 
-			data = self.get_page(current.keys[DK_DATA])
+			data = self.get_page(keys[DK_DATA])
 
 			symbol = SYMBOLS[instruction]
+			print(symbol)
 
 			jump = False
 
@@ -167,6 +189,11 @@ class KeyFuck:
 					ipkey.value = current.jmpmap[ip]
 					jump = True
 
+			elif symbol == "m":
+				messagekeylistkey = keys[data[pointer]]
+				domainkey = self.get_keys(messagekeylistkey)
+				current = self.get_domain(domainkey)
+
 			if not jump:
 				ipkey.value += 1
 
@@ -184,8 +211,11 @@ def genrandom(length=256):
 	return code
 
 def genstatic():
-	return "+>++[-]<-"
+	return "+>++[-]<+"
 
 kf = KeyFuck()
 domainkey = kf.create_domain(kf.prime_time_meter, kf.prime_memory_meter, translate(genstatic()))
 kf.run(domainkey)
+datapagekey = kf.get_domain(domainkey).associated(kf, DK_DATA)
+data = kf.get_page(datapagekey).data
+print(data)
