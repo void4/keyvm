@@ -30,6 +30,9 @@ class Key:
 		#[%i]" % self.refs
 		return "🔑 " + str(self.__class__).split(".")[-1][:-2] + ": " + str(self.value)
 
+	def attenuate(self, option=None):
+		return self
+
 class PageKey(Key):
 	pass
 
@@ -46,7 +49,18 @@ class KeyListKey(Key):
 
 # Parent meter, controlling domain, resources
 class MeterKey(Key):
-	pass
+	def use(self, amount):
+		if self.value[MK_RESOURCES] >= 0 and self.value[MK_RESOURCES] < amount:
+			return False
+		else:
+			self.value[MK_RESOURCES] -= amount
+			return True
+
+	def attenuate(self, option):
+		if option == 0:
+			return self
+		else:
+			return MeterKey([self, self.value[1], self.value[MK_RESOURCES]//option])
 
 MK_PARENT, MK_CONTROLLER, MK_RESOURCES = range(3)
 
@@ -128,6 +142,8 @@ class KeyFuck:
 		return self.keylists[keylistkey.value]
 
 	def create_page(self, memory_meter_key):
+		if not memory_meter_key.use(PAGESIZE):
+			return None
 		page = Page(memory_meter_key)
 		pagekey = PageKey(self.create_id())
 		self.pages[pagekey.value] = page
@@ -140,6 +156,8 @@ class KeyFuck:
 	def create_domain(self, time_meter_key, memory_meter_key, code=None):
 		codepagekey = self.create_page(memory_meter_key)
 		datapagekey = self.create_page(memory_meter_key)
+
+		#TODO if codepagekey is None or datapagekey is None, revert
 
 		if code is not None:
 			codepage = self.get_page(codepagekey)
@@ -312,7 +330,17 @@ class KeyFuck:
 			elif symbol == "a":
 				# Attenuate key
 				# how to weaken meter key by certain amount? if CELLSIZE=256, this might suck
-				pass
+				# attenuate in place or by copy/transfer?
+				# for now, in place
+				wb1 = self.get_keylist(keys[DK_WORKBENCH])
+				indices = data[pointer]
+				wbi1 = (indices & 0xf)
+				option = ((indices >> 4) & 0xf)
+
+				key = wb1[wbi1]
+
+				if key is not None:
+					wb1[wbi1] = key.attenuate(option)
 
 			elif symbol == "m":
 				# use "m" to communicate with system? or separate instruction?
