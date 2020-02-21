@@ -190,9 +190,17 @@ class KeyFuck:
 					jump = True
 
 			elif symbol == "m":
+				# use "m" to communicate with system? or separate instruction?
+				# system invocations (and their effects) have to obey resource constraints
+				# SystemKey? Available anywhere? Like complete memory override? Or only local, relative effects?
 				messagekeylistkey = keys[data[pointer]]
-				domainkey = self.get_keys(messagekeylistkey)
-				current = self.get_domain(domainkey)
+				messagekeylist = self.get_keys(messagekeylistkey)
+				domainkey = messagekeylist[0]
+				if domainkey is None:
+					# System call
+					pass
+				else:
+					current = self.get_domain(domainkey)
 
 			if not jump:
 				ipkey.value += 1
