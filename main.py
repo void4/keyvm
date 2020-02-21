@@ -1,6 +1,8 @@
 CELLSIZE = 256
 KEYLISTLEN = 16
+MK_PARENT, MK_CONTROLLER, MK_RESOURCES = range(3)
 
+PAGESIZE = 256
 class KeyList:
 	def __init__(self):
 		self.data = [None for i in range(KEYLISTLEN)]
@@ -62,9 +64,7 @@ class MeterKey(Key):
 		else:
 			return MeterKey([self, self.value[1], self.value[MK_RESOURCES]//option])
 
-MK_PARENT, MK_CONTROLLER, MK_RESOURCES = range(3)
 
-PAGESIZE = 16
 
 class Page:
 	def __init__(self, parentmeter):
@@ -312,8 +312,8 @@ class KeyFuck:
 				wb2 = self.get_keylist(keys[DK_WORKBENCH2])
 
 				indices = data[pointer]
-				wb1i = (indices & 0xf)
-				wb2i = ((indices >> 4) & 0xf)
+				wb1i = ((indices >> 4) & 0xf)
+				wb2i = (indices & 0xf)
 
 				wb2[wb2i] = wb1[wb1i]
 
@@ -334,8 +334,8 @@ class KeyFuck:
 				# for now, in place
 				wb1 = self.get_keylist(keys[DK_WORKBENCH])
 				indices = data[pointer]
-				wbi1 = (indices & 0xf)
-				option = ((indices >> 4) & 0xf)
+				wbi1 = ((indices >> 4) & 0xf)
+				option = (indices & 0xf)
 
 				key = wb1[wbi1]
 
@@ -367,7 +367,7 @@ class KeyFuck:
 
 from random import choice
 
-SYMBOLS = "><+-[]rtlcdsam"
+SYMBOLS = "><+-[]²½rtlcdsam"
 
 def translate(code):
 	return [SYMBOLS.index(c) for c in code]
@@ -378,7 +378,12 @@ def genrandom(length=256):
 		code += choice(SYMBOLS)
 	return code
 
-PROGRAM = "+++++++l>+"
+PROGRAM = """+++++++l
+>²²²²+²²²²c
+s
+>²²²²²²²+²a"""
+
+PROGRAM = PROGRAM.replace("\n", "").replace(" ", "")
 
 
 kf = KeyFuck()

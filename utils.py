@@ -24,5 +24,5 @@ def pair(a,b):
     return c
 
 print(num(255))
-print(pair(7,7))
+print(pair(1,0))
 print(clear())
