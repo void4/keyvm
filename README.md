@@ -17,6 +17,8 @@ Everything in the KeyKOS architecture is derived from three things:
 #### Domain
 A domain is just a KeyList that is structured in a way that it can run as a process. It points to a page to contains the code it executes and to another which it uses as data memory.
 
+Domains pass control by sending a message to another domain by invoking a DomainKey. A message consists only of a KeyListKey which is copied to the called domains' KeyList. In this implementation, only one domain has control at a time (single-threaded architecture).
+
 It is possible to copy keys and send them to another domain. This is the way rights are distributed throughout the system. A domain has only 16 slots in its KeyList, but since (KeyList)Keys can refer to other KeyLists, it is possible to create a tree of keys that is as large as necessary.
 
 #### Meters
@@ -33,7 +35,7 @@ When a domain runs, the entire meter chain up to the prime meter is decreased at
 | KeyListKey | Read and write access to a KeyList | |
 | PageKey | Read and write access to a page | Can be attenuated to PageReadKey |
 | PageReadKey | Read access to a page | Not yet implemented |
-| DomainKey | Allows sending a message and thus transferring control to the referred domain | Also called GateKey in KeyKOS. Make this the same as KeyListKey? |
+| DomainKey | Allows sending a message and thus transferring control to the referred domain | Also called GateKey in KeyKOS. |
 
 More info here: http://www.cap-lore.com/Agorics/Library/KeyKos/
 
@@ -50,7 +52,7 @@ A domain has two "workbenches". This weird setup is required to make the brainfu
 
 - switch workbenches (optional?, implement on a higher level?)
 - reset the workbench to the current domain KeyList
-- make a workbench point to a KeyList in the current KeyList (traversing down)
+- make a workbench point to a KeyList pointed to by a KeyListKey in the current KeyList (traversing down)
 
 ## Usage
 
@@ -86,3 +88,13 @@ Just use memory-limit, not memory-time
 -> manual deletion, no automatic garbage collection except unreferenced keys
 
 keyspace. the final frontier.
+
+DomainKey: Make this the same as KeyListKey? Nopenopenope: otherwise every caller could modify the called domain -> "DomainSendKey" or something
+-> yeah, now i understand why KeyKOS has DomainKey and GateKey
+
+KeyListKey = DomainKey
+DomainKey = GateKey
+
+make sure Domain key has no read or write access beyond sending message
+
+should domain be able to call itself?

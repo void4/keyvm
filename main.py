@@ -8,6 +8,7 @@ class KeyList:
 		self.data = [None for i in range(KEYLISTLEN)]
 
 	def __setitem__(self, key, value):
+		# TODO allow ints? DataKey?
 		assert isinstance(value, Key), type(value)
 		if self.data[key] is not None:
 			#del self.data[key]#this actually deletes list entry!
@@ -377,6 +378,8 @@ class KeyFuck:
 
 					# use DK_WORKBENCH2 as DK_INBOX!, also as outbox?
 					#		keys[DK_INBOX] = kf.create_keylist()
+					# Allow sending only one key? or entire workbench? copy or allow access to keylistkey?
+					# Allow empty message? -> Empty workbench
 					receiverkeys = self.get_keylist(receiver.keylistkey)
 					receiverkeys[DK_WORKBENCH2] = keys[DK_WORKBENCH2]
 					print("SENDING")
