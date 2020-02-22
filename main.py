@@ -1,8 +1,8 @@
 CELLSIZE = 256
 KEYLISTLEN = 16
 MK_PARENT, MK_CONTROLLER, MK_RESOURCES = range(3)
-
 PAGESIZE = 256
+
 class KeyList:
 	def __init__(self):
 		self.data = [None for i in range(KEYLISTLEN)]
@@ -64,8 +64,6 @@ class MeterKey(Key):
 			return self
 		else:
 			return MeterKey([self, self.value[1], self.value[MK_RESOURCES]//option])
-
-
 
 class Page:
 	def __init__(self, parentmeter):
@@ -403,6 +401,7 @@ def genrandom(length=256):
 		code += choice(SYMBOLS)
 	return code
 
+#XXX REPLICATOR XXX
 source = """7l
 >c(1,0)
 >a(0,2)
@@ -423,7 +422,7 @@ print(PROGRAM)
 
 PROGRAM = PROGRAM.replace("\n", "").replace(" ", "")
 import traceback
-kf = KeyFuck(15000)
+kf = KeyFuck(15000)#TODO this doesn't really work, investigate
 codepagekey = kf.create_page(kf.prime_memory_meter)
 kf.copycode(codepagekey, translate(PROGRAM))
 domainkey = kf.create_domain(kf.prime_time_meter, kf.prime_memory_meter, codepagekey)#genrandom()))
