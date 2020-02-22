@@ -15,7 +15,9 @@ Everything in the KeyKOS architecture is derived from three things:
 - Page: a contiguous sequence of bytes of a fixed size, used to store code and data. Pointed to by PageKeys
 
 #### Domain
-A domain is just a KeyList that is structured in a way that it can run as a process. It is possible to copy keys and send them to another domain. This is the way rights are distributed throughout the system.
+A domain is just a KeyList that is structured in a way that it can run as a process. It points to a page to contains the code it executes and to another which it uses as data memory.
+
+It is possible to copy keys and send them to another domain. This is the way rights are distributed throughout the system. A domain has only 16 slots in its KeyList, but since (KeyList)Keys can refer to other KeyLists, it is possible to create a tree of keys that is as large as necessary.
 
 #### Meters
 
@@ -25,8 +27,6 @@ MeterKeys are organized in a tree hierarchy, each meter has a parent meter, up t
 In order to allocate more pages, one needs a Memory MeterKey with sufficient resources.
 When a domain runs, the entire meter chain up to the prime meter is decreased at every execution step. When a meter runs out of time, its the controller of its parent (RESEARCH) receives control.
 
-More info here: http://www.cap-lore.com/Agorics/Library/KeyKos/
-
 | Key | Right | Example |
 | --- | --- | --- |
 | MeterKey | | Separate into time and memory keys? |
@@ -34,7 +34,8 @@ More info here: http://www.cap-lore.com/Agorics/Library/KeyKos/
 | PageKey | Read and write access to a page | Can be attenuated to PageReadKey |
 | PageReadKey | Read access to a page | Not yet implemented |
 | DomainKey | Allows sending a message and thus transferring control to the referred domain | Also called GateKey in KeyKOS. Make this the same as KeyListKey? |
-| | | |
+
+More info here: http://www.cap-lore.com/Agorics/Library/KeyKos/
 
 ### Main actions
 
