@@ -29,8 +29,8 @@ When a domain runs, the entire meter chain up to the prime meter is decreased at
 
 | Key | Right | Example |
 | --- | --- | --- |
-| MeterKey | | Separate into time and memory keys? |
-| KeyListKey | Read and write access to a page | |
+| MeterKey | Draw resources from the parent meter chain | Separate into time and memory keys? |
+| KeyListKey | Read and write access to a KeyList | |
 | PageKey | Read and write access to a page | Can be attenuated to PageReadKey |
 | PageReadKey | Read access to a page | Not yet implemented |
 | DomainKey | Allows sending a message and thus transferring control to the referred domain | Also called GateKey in KeyKOS. Make this the same as KeyListKey? |
@@ -47,6 +47,10 @@ More info here: http://www.cap-lore.com/Agorics/Library/KeyKos/
 
 ### Keyfuck-Specific
 A domain has two "workbenches". This weird setup is required to make the brainfuck-semantics as elegant as possible.
+
+- switch workbenches (optional?, implement on a higher level?)
+- reset the workbench to the current domain KeyList
+- make a workbench point to a KeyList in the current KeyList (traversing down)
 
 ## Usage
 
