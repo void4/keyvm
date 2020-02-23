@@ -37,7 +37,10 @@ When a domain runs, the entire meter chain up to the prime meter is decreased at
 | PageReadKey | Read access to a page | Not yet implemented |
 | DomainKey | Allows sending a message and thus transferring control to the referred domain | Also called GateKey in KeyKOS. |
 
-More info here: http://www.cap-lore.com/Agorics/Library/KeyKos/
+More info here:
+
+- http://www.cap-lore.com/Agorics/Library/KeyKos/key370.html
+- http://www.cap-lore.com/Agorics/Library/KeyKos/
 
 ### Main actions
 
