@@ -186,10 +186,12 @@ class KeyFuck:
 			if isinstance(key, KeyListKey) and key not in visited:
 				visited.append(key)
 				self.viz(key, depth+1, visited)
-			elif isinstance(key, DomainKey) and key not in visited:
+			elif isinstance(key, DomainKey):
 				domain = self.get_domain(key)
-				visited.append(domain.keylistkey)
-				self.viz(domain.keylistkey, depth+1, visited)
+				# Prevent visualizing domain keylist twice
+				if domain.keylistkey not in visited:
+					visited.append(domain.keylistkey)
+					self.viz(domain.keylistkey, depth+1, visited)
 
 	def gviz(self):
 		import pandas as pd
