@@ -34,6 +34,9 @@ class Key:
 		#[%i]" % self.refs
 		return "🔑 " + str(self.__class__).split(".")[-1][:-2] + ": " + str(self.value)
 
+	def __repr__(self):
+		return str(self)
+
 	def attenuate(self, option=None):
 		return self
 
@@ -183,6 +186,10 @@ class KeyFuck:
 			if isinstance(key, KeyListKey) and key not in visited:
 				visited.append(key)
 				self.viz(key, depth+1, visited)
+			elif isinstance(key, DomainKey) and key not in visited:
+				domain = self.get_domain(key)
+				visited.append(domain.keylistkey)
+				self.viz(domain.keylistkey, depth+1, visited)
 
 	def gviz(self):
 		import pandas as pd
@@ -277,7 +284,7 @@ class KeyFuck:
 			#print(data.data)
 
 			symbol = SYMBOLS[instruction]
-			print(symbol)
+			print(symbol, end="")
 
 			jump = False
 
@@ -374,6 +381,7 @@ class KeyFuck:
 					print("System call")
 					pass
 				else:
+					print(chain[0])
 					receiver = self.get_domain(domainkey)
 
 					# use DK_WORKBENCH2 as DK_INBOX!, also as outbox?
