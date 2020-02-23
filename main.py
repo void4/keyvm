@@ -130,6 +130,9 @@ class KeyFuck:
 		self.prime_time_meter = MeterKey([None, None, timelimit])
 		self.prime_memory_meter = MeterKey([None, None, memorylimit])
 
+	def __repr__(self):
+		return f"Time: {self.prime_time_meter.value[2]}\tMemory:{self.prime_memory_meter.value[2]}\tKeylists:{len(self.keylists)}\tDomains:{len(self.domains)}\tPages:{len(self.pages)}"
+
 	def create_id(self):
 		#should use dict with globally unique id, in case pages get deleted
 		self.ids += 1
@@ -235,6 +238,7 @@ class KeyFuck:
 		while True:#current.associated(self, DK_STATE).value == DS_ACTIVE:
 			# do a step
 			# Ascend the meter chain
+			print(self)
 			# TODO investigate this
 			if current is None:
 				break
@@ -450,5 +454,6 @@ domain = kf.get_domain(domainkey)
 datapagekey = domain.associated(kf, DK_DATA)
 data = kf.get_page(datapagekey).data
 #print([bin(d)[2:].zfill(8) for d in data])
-kf.viz(domain.keylistkey)
-kf.gviz()
+#kf.viz(domain.keylistkey)
+#kf.gviz()
+print(kf)
