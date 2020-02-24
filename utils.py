@@ -62,15 +62,15 @@ def asm(p):
 
 		if op in "ca":
 			read(1)
-			result += pair(*readargs(2)) + op + "\n"
+			result += pair(*readargs(2)) + op + "\n"#num(0) + "\n"
 		elif op in "dm":
 			read(1)
-			result += num(readargs(1)[0]) + op + "\n"
+			result += num(readargs(1)[0]) + op + "\n"#num(0) + "\n"
 		elif op in "0123456789":
 			result += num(readi()) + "\n"
 		elif op in "\n \t":
 			read(1)
 		else:
-			result += read(1) + "\n"
+			result += read(1) + "\n"#num(0) + "\n"
 
 	return result

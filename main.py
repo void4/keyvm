@@ -43,6 +43,9 @@ class Key:
 class PageKey(Key):
 	pass
 
+class PageReadKey(Key):
+	pass
+
 class DomainKey(Key):
 	pass
 
@@ -78,10 +81,69 @@ class Page:
 		return self.data[key]
 
 	def __setitem__(self, key, value):
+		#TODO Check if writer has PageKey (not PageReadKey)
+		#Create something like PageContext?
+		#Cache it?
 		self.data[key] = value
+
+	def read(self, key, value):
+		self[key] = value
 
 	def __len__(self):
 		return len(self.data)
+
+class SegmentKey(Key):
+	pass
+
+class Segment(KeyList):
+
+	def length(self, kf):
+		"""TODO: also cache this"""
+		total_length = 0
+		for key in self.data:
+			if isinstance(key, PageKey):
+				total_length += len(kf.get_page(key))
+			elif isinstance(key, SegmentKey):
+				total_length += kf.get_segment(key).length(kf)
+
+		return total_length
+
+	def __setitem__(self, key, value):
+		# TODO allow ints? DataKey?
+		assert isinstance(value, SegmentKey) or isinstance(value, PageKey), type(value)
+		if self.data[key] is not None:
+			#del self.data[key]#this actually deletes list entry!
+			self.__delitem__(key)
+		self.data[key] = value
+
+	def traverse(self, kf, offset, start=0):
+
+		# Because subsegment size may change (unless all parents get updated on change, hm)
+		# have to check lengths on every memory access
+		#TODO perhaps implement len() on Segment and Page keys
+
+		for key in self.data:
+			if isinstance(key, PageKey):
+				page = kf.get_page(key)
+				if offset - start < len(page):
+					return page[offset - start], None
+				else:
+					start += len(page)
+			elif isinstance(key, SegmentKey):
+				segment = kf.get_segment(key)
+				value, start = segment.traverse(kf, offset, start)
+				if start is None:
+					return value, start
+
+		return None, start
+
+	def read(self, kf, offset):
+		value, start = self.traverse(kf, offset)
+		if start is None:
+			return value
+
+		raise AssertionError("out of bounds memory access")
+
 
 DK_STATE, DK_TIME, DK_IP, DK_CODE, DK_POINTER, DK_DATA, DK_WORKBENCH, DK_WORKBENCH2, DK_MEMORY = range(9)
 DS_ACTIVE, DS_WAITING = range(2)
@@ -127,6 +189,7 @@ class KeyFuck:
 		self.keylists = {}
 		self.domains = {}
 		self.pages = {}
+		self.segments = {}
 		self.prime_time_meter = MeterKey([None, None, timelimit])
 		self.prime_memory_meter = MeterKey([None, None, memorylimit])
 
@@ -177,6 +240,15 @@ class KeyFuck:
 	def get_domain(self, domainkey):
 		assert isinstance(domainkey, DomainKey)
 		return self.domains[domainkey.value]
+
+	def create_segment(self):
+		segmentkey = SegmentKey(self.create_id())
+		self.segments[segmentkey.value] = Segment()
+		return segmentkey
+
+	def get_segment(self, segmentkey):
+		assert isinstance(segmentkey, SegmentKey)
+		return self.segments[segmentkey.value]
 
 	def viz(self, keylistkey, depth=0, visited=None):
 		if visited is None:
@@ -419,41 +491,45 @@ def genrandom(length=256):
 	return code
 
 #XXX REPLICATOR XXX
-source = """7l
->c(1,0)
->a(0,2)
->c(8,1)
->c(3,2)
+source = """
++++
+[
+7l
+c(1,0)
+a(0,2)
+c(8,1)
+c(3,2)
 d(9)
->7l
->c(9,0)
->m(7)
+7l
+c(9,0)
+m(7)
+]
 """
 
 
 from utils import asm
 
+if __name__ == "__main__":
+	PROGRAM = asm(source)
+	print(PROGRAM)
 
-PROGRAM = asm(source)
-print(PROGRAM)
-
-PROGRAM = PROGRAM.replace("\n", "").replace(" ", "")
-import traceback
-kf = KeyFuck(15000)#TODO this doesn't really work, investigate
-codepagekey = kf.create_page(kf.prime_memory_meter)
-kf.copycode(codepagekey, translate(PROGRAM))
-domainkey = kf.create_domain(kf.prime_time_meter, kf.prime_memory_meter, codepagekey)#genrandom()))
-try:
-	kf.run(domainkey, False)
-except AssertionError as e:
-	print(e)
-	traceback.print_exc()
-except KeyboardInterrupt:
-	pass
-domain = kf.get_domain(domainkey)
-datapagekey = domain.associated(kf, DK_DATA)
-data = kf.get_page(datapagekey).data
-#print([bin(d)[2:].zfill(8) for d in data])
-#kf.viz(domain.keylistkey)
-#kf.gviz()
-print(kf)
+	PROGRAM = PROGRAM.replace("\n", "").replace(" ", "")
+	import traceback
+	kf = KeyFuck(15000)#TODO this doesn't really work, investigate
+	codepagekey = kf.create_page(kf.prime_memory_meter)
+	kf.copycode(codepagekey, translate(PROGRAM))
+	domainkey = kf.create_domain(kf.prime_time_meter, kf.prime_memory_meter, codepagekey)#genrandom()))
+	try:
+		kf.run(domainkey, False)
+	except AssertionError as e:
+		print(e)
+		traceback.print_exc()
+	except KeyboardInterrupt:
+		pass
+	domain = kf.get_domain(domainkey)
+	datapagekey = domain.associated(kf, DK_DATA)
+	data = kf.get_page(datapagekey).data
+	#print([bin(d)[2:].zfill(8) for d in data])
+	#kf.viz(domain.keylistkey)
+	#kf.gviz()
+	print(kf)
