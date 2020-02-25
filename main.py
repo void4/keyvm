@@ -144,6 +144,11 @@ class Segment(KeyList):
 
 		raise AssertionError("out of bounds memory access")
 
+def split(bits):
+	"""splits an 8 bit value into two 4 bit values"""
+	a = ((bits >> 4) & 0xf)
+	b = (bits & 0xf)
+	return a,b
 
 DK_STATE, DK_TIME, DK_IP, DK_CODE, DK_POINTER, DK_DATA, DK_WORKBENCH, DK_WORKBENCH2, DK_MEMORY = range(9)
 DS_ACTIVE, DS_WAITING = range(2)
@@ -413,8 +418,7 @@ class KeyFuck:
 				wb2 = self.get_keylist(keys[DK_WORKBENCH2])
 
 				indices = data[pointer]
-				wb1i = ((indices >> 4) & 0xf)
-				wb2i = (indices & 0xf)
+				wb1i, wb2i = split(indices)
 				#print(wb1[wb1i])
 				wb2[wb2i] = wb1[wb1i]
 
@@ -428,7 +432,7 @@ class KeyFuck:
 				wb1 = self.get_keylist(keys[DK_WORKBENCH])
 				wb1[data[pointer]] = domainkey
 
-			elif symbol == "s":
+			elif symbol == "f":
 				keys[DK_WORKBENCH], keys[DK_WORKBENCH2] = keys[DK_WORKBENCH2], keys[DK_WORKBENCH]
 
 			elif symbol == "a":
@@ -449,6 +453,7 @@ class KeyFuck:
 					raise AssertionError("FUCK")
 
 			elif symbol == "m":
+				"""send message/key to domain"""
 				# use "m" to communicate with system? or separate instruction?
 				# system invocations (and their effects) have to obey resource constraints
 				# SystemKey? Available anywhere? Like complete memory override? Or only local, relative effects?
@@ -472,14 +477,37 @@ class KeyFuck:
 					current = receiver
 
 			elif symbol == "h":
+				"""halt"""
 				break
+
+			elif symbol == "p":
+				"""create page"""
+				# only on empty keyslot?
+				slotindex, meterkeyindex = split(data[pointer])
+				if keys[slotindex] is None:
+					keys[slotindex] = self.create_page(keys[meterkeyindex])
+				else:
+					#???
+					pass
+				pass
+
+			elif symbol == "s":
+				"""create segment/upgrade keylist"""
+				# only on empty keyslot? upgrading/preparing existing keylist?
+				# meterkeyindex missing
+				slotindex, _ = split(data[pointer])
+				if keys[slotindex] is None:
+					keys[slotindex] = self.create_segment()
+				else:
+					#???
+					pass
 
 			if not jump:
 				ipkey.value += 1
 
 from random import choice
 
-SYMBOLS = "h><+-[]²½rtlcdsam"
+SYMBOLS = "h><+-[]²½rtlcdfamsp"
 
 def translate(code):
 	return [SYMBOLS.index(c) for c in code]
