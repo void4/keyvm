@@ -47,10 +47,24 @@ class MeterKey(Key):
 PG_DATA, PG_KEYS = range(2)
 
 class Page:
-	def __init__(self, type, parentmeter, pagesize):
+	def __init__(self, type, parentmeter, size):
+		if not parentmeter.use(size):
+			raise AssertionError("NOT IMPLEMENTED")
+			return None
 		self.type = type
 		self.meter = parentmeter
-		self.data = [None for i in range(pagesize)]
+		self.data = [None for i in range(size)]
+
+	def resize(self, size):
+		if not self.meter.use(size):
+			raise AssertionError("NOT IMPLEMENTED")
+			return None
+
+		print("RESIZE")
+		if size < len(self):
+			self.data = self.data[:size]
+		else:
+			self.data += [0 for i in range(size-len(self))]
 
 	def __getitem__(self, key):
 		return self.data[key]
@@ -79,9 +93,6 @@ class Page:
 	def __iter__(self):
 		return iter(self.data)
 
-DOMAINFIELDS = 8
-D_STATE, D_TIME, D_MEMORY, D_IP, D_CODE, D_POINTER, D_STACK, D_DATA = range(DOMAINFIELDS)
-DS_ACTIVE, DS_WAITING = range(2)#ommit these? global active index in image?
 
 class KeyVM:
 	def __init__(self, timelimit=-1, memorylimit=-1):
@@ -100,9 +111,6 @@ class KeyVM:
 		return self.ids
 
 	def create_page(self, type, memory_meter_key, pagesize):
-		if not memory_meter_key.use(pagesize):
-			raise AssertionError("NOT IMPLEMENTED")
-			return None
 		page = Page(type, memory_meter_key, pagesize)
 		pagekey = PageKey(self.create_id())
 		self.pages[pagekey.value] = page
@@ -115,6 +123,8 @@ class KeyVM:
 	def domainkey_from_code(self, code):
 		domainkey = self.create_page(PG_KEYS, self.prime_memory_meter, DOMAINFIELDS)
 		domainpage = self.get_page(domainkey)
+
+		domainpage[D_SELF] = domainkey
 
 		domainpage[D_STATE] = Key(0)
 		domainpage[D_TIME] = self.prime_time_meter
@@ -254,7 +264,7 @@ class KeyVM:
 				if pointerkey.value < n:
 					raise Exception("StackUnderflow")
 				values = []
-				for index in range(pointerkey.value-1, pointerkey.value-n-1, -1):
+				for index in range(pointerkey.value-n, pointerkey.value, 1):
 					values.append(stackpage[index])
 					stackpage[index] = 0
 					print(index)
@@ -277,6 +287,31 @@ class KeyVM:
 
 			elif I == I_ADD:
 				a,b = popn(2)
+				push(a+b)
+
+			elif I == I_SUB:
+				a,b = popn(2)
+				push(a-b)
+
+			elif I == I_PAGECREATE:
+				targetindex, type, meterkeyindex, size = popn(4)
+				domainpage[targetindex] = self.create_page(type, domainpage[meterkeyindex], size)
+
+			elif I == I_PAGETYPE:
+				sourceindex = pop()
+				page = self.get_page(domainpage[sourceindex])
+				push(page.type)
+
+			elif I == I_PAGESIZEGET:
+				sourceindex = pop()
+				page = self.get_page(domainpage[sourceindex])
+				push(len(page))
+
+			elif I == I_PAGESIZESET:
+				targetindex, size = popn(2)
+				print(targetindex, size)
+				page = self.get_page(domainpage[targetindex])
+				page.resize(size)
 
 			print("Stack:", stackpage[:pointerkey.value])
 
