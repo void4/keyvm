@@ -1,20 +1,20 @@
-from main import KeyFuck
+from main import KeyVM
 
-kf = KeyFuck()
-page1key = kf.create_page(kf.prime_memory_meter)
-page2key = kf.create_page(kf.prime_memory_meter)
-page3key = kf.create_page(kf.prime_memory_meter)
+vm = KeyFuck()
+page1key = vm.create_page(vm.prime_memory_meter)
+page2key = vm.create_page(vm.prime_memory_meter)
+page3key = vm.create_page(vm.prime_memory_meter)
 
-segment1key = kf.create_segment()
-segment2key = kf.create_segment()
+segment1key = vm.create_segment()
+segment2key = vm.create_segment()
 
-segment2 = kf.get_segment(segment2key)
+segment2 = vm.get_segment(segment2key)
 segment2[0] = page1key
 segment2[1] = page2key
 
-segment1 = kf.get_segment(segment1key)
+segment1 = vm.get_segment(segment1key)
 segment1[0] = segment2key
 segment1[1] = page3key
 
-print(segment1.length(kf))
-print(segment1.read(kf, 512))
+print(segment1.length(vm))
+print(segment1.read(vm, 512))

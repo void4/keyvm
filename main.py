@@ -1,4 +1,4 @@
-from vm import KeyFuck, translate, DK_DATA
+from vm import KeyVM, translate, DK_DATA
 from utils import asm
 
 #XXX REPLICATOR XXX
@@ -23,21 +23,21 @@ if __name__ == "__main__":
 
 	program = program.replace("\n", "").replace(" ", "")
 	import traceback
-	kf = KeyFuck(15000)#TODO this doesn't really work, investigate
-	codepagekey = kf.create_page(kf.prime_memory_meter)
-	kf.copycode(codepagekey, translate(program))
-	domainkey = kf.create_domain(kf.prime_time_meter, kf.prime_memory_meter, codepagekey)#genrandom()))
+	vm = KeyVM(15000)#TODO this doesn't really work, investigate
+	codepagekey = vm.create_page(vm.prime_memory_meter)
+	vm.copycode(codepagekey, translate(program))
+	domainkey = vm.create_domain(vm.prime_time_meter, vm.prime_memory_meter, codepagekey)#genrandom()))
 	try:
-		kf.run(domainkey, False)
+		vm.run(domainkey, False)
 	except AssertionError as e:
 		print(e)
 		traceback.print_exc()
 	except KeyboardInterrupt:
 		pass
-	domain = kf.get_domain(domainkey)
-	datapagekey = domain.associated(kf, DK_DATA)
-	data = kf.get_page(datapagekey).data
+	domain = vm.get_domain(domainkey)
+	datapagekey = domain.associated(vm, DK_DATA)
+	data = vm.get_page(datapagekey).data
 	#print([bin(d)[2:].zfill(8) for d in data])
-	#kf.viz(domain.keylistkey)
-	#kf.gviz()
-	print(kf)
+	#vm.viz(domain.keylistkey)
+	#vm.gviz()
+	print(vm)

@@ -110,14 +110,14 @@ class SegmentKey(Key):
 
 class Segment(KeyList):
 
-	def length(self, kf):
+	def length(self, vm):
 		"""TODO: also cache this"""
 		total_length = 0
 		for key in self.data:
 			if isinstance(key, PageKey):
-				total_length += len(kf.get_page(key))
+				total_length += len(vm.get_page(key))
 			elif isinstance(key, SegmentKey):
-				total_length += kf.get_segment(key).length(kf)
+				total_length += vm.get_segment(key).length(vm)
 
 		return total_length
 
@@ -129,7 +129,7 @@ class Segment(KeyList):
 			self.__delitem__(key)
 		self.data[key] = value
 
-	def traverse(self, kf, offset, start=0):
+	def traverse(self, vm, offset, start=0):
 
 		# Because subsegment size may change (unless all parents get updated on change, hm)
 		# have to check lengths on every memory access
@@ -137,21 +137,21 @@ class Segment(KeyList):
 
 		for key in self.data:
 			if isinstance(key, PageKey):
-				page = kf.get_page(key)
+				page = vm.get_page(key)
 				if offset - start < len(page):
 					return page[offset - start], None
 				else:
 					start += len(page)
 			elif isinstance(key, SegmentKey):
-				segment = kf.get_segment(key)
-				value, start = segment.traverse(kf, offset, start)
+				segment = vm.get_segment(key)
+				value, start = segment.traverse(vm, offset, start)
 				if start is None:
 					return value, start
 
 		return None, start
 
-	def read(self, kf, offset):
-		value, start = self.traverse(kf, offset)
+	def read(self, vm, offset):
+		value, start = self.traverse(vm, offset)
 		if start is None:
 			return value
 
@@ -167,10 +167,10 @@ DK_STATE, DK_TIME, DK_IP, DK_CODE, DK_POINTER, DK_DATA, DK_WORKBENCH, DK_WORKBEN
 DS_ACTIVE, DS_WAITING = range(2)
 
 class Domain:
-	def __init__(self, kf, keylistkey, time_meter_key, memory_meter_key, codepagekey, datapagekey):
+	def __init__(self, vm, keylistkey, time_meter_key, memory_meter_key, codepagekey, datapagekey):
 		self.keylistkey = keylistkey
 
-		keys = kf.get_keylist(self.keylistkey)
+		keys = vm.get_keylist(self.keylistkey)
 		keys[DK_STATE] = Key(0)#STATE
 		keys[DK_TIME] = time_meter_key
 		keys[DK_IP] = Key(0)#IP
@@ -182,7 +182,7 @@ class Domain:
 		keys[DK_MEMORY] = memory_meter_key
 
 		# Assume immutable code? Or update on codepagekey change
-		codepage = kf.get_page(codepagekey)
+		codepage = vm.get_page(codepagekey)
 
 		self.jmpmap = {}
 		jmplst = []
@@ -197,11 +197,11 @@ class Domain:
 				self.jmpmap[ci] = matching
 				self.jmpmap[matching] = ci + 1
 
-	def associated(self, kf, keyindex):
-		keys = kf.get_keylist(self.keylistkey)
+	def associated(self, vm, keyindex):
+		keys = vm.get_keylist(self.keylistkey)
 		return keys[keyindex]
 
-class KeyFuck:
+class KeyVM:
 	def __init__(self, timelimit=-1, memorylimit=-1):
 		self.ids = 0
 		self.keylists = {}
@@ -481,7 +481,7 @@ class KeyFuck:
 					receiver = self.get_domain(domainkey)
 
 					# use DK_WORKBENCH2 as DK_INBOX!, also as outbox?
-					#		keys[DK_INBOX] = kf.create_keylist()
+					#		keys[DK_INBOX] = vm.create_keylist()
 					# Allow sending only one key? or entire workbench? copy or allow access to keylistkey?
 					# Allow empty message? -> Empty workbench
 					receiverkeys = self.get_keylist(receiver.keylistkey)
