@@ -292,6 +292,38 @@ class KeyVM:
 				a,b = popn(2)
 				push(a-b)
 
+			elif I == I_MUL:
+				a,b = popn(2)
+				push(a*b)
+
+			elif I == I_DIV:
+				a,b = popn(2)
+				if b == 0:
+					raise Exception("DivisionByZero")
+				push(a//b)
+
+			elif I == I_MOD:
+				if b == 0:
+					raise Exception("DivisionByZero")
+				a,b = popn(2)
+				push(a%b)
+
+			elif I == I_AND:
+				a,b = popn(2)
+				push(a&b)
+
+			elif I == I_OR:
+				a,b = popn(2)
+				push(a|b)
+
+			elif I == I_XOR:
+				a,b = popn(2)
+				push(a^b)
+
+			elif I == I_NOT:
+				a = pop()
+				push(~a)
+
 			elif I == I_PAGECREATE:
 				targetindex, type, meterkeyindex, size = popn(4)
 				domainpage[targetindex] = self.create_page(type, domainpage[meterkeyindex], size)
@@ -328,7 +360,6 @@ class KeyVM:
 
 			elif I == I_JUMP:
 				jumptarget = pop()
-				print("JT", jumptarget)
 				ipkey.value = jumptarget
 				jump = True
 
