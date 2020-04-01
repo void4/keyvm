@@ -254,9 +254,11 @@ class KeyVM:
 			def pop():
 				if pointerkey.value == 0:
 					raise Exception("StackUnderflow")
-				value = stackpage[pointerkey.value]
-				stackpage[pointerkey.value] = 0
+				print(stackpage, pointerkey.value)
+				value = stackpage[pointerkey.value-1]
+				stackpage[pointerkey.value-1] = 0
 				pointerkey.value -= 1
+				return value
 
 			def popn(n):
 				if pointerkey.value < n:
@@ -326,6 +328,7 @@ class KeyVM:
 
 			elif I == I_JUMP:
 				jumptarget = pop()
+				print("JT", jumptarget)
 				ipkey.value = jumptarget
 				jump = True
 
