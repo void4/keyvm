@@ -60,7 +60,6 @@ class Page:
 			raise AssertionError("NOT IMPLEMENTED")
 			return None
 
-		print("RESIZE")
 		if size < len(self):
 			self.data = self.data[:size]
 		else:
@@ -267,7 +266,6 @@ class KeyVM:
 				for index in range(pointerkey.value-n, pointerkey.value, 1):
 					values.append(stackpage[index])
 					stackpage[index] = 0
-					print(index)
 				pointerkey.value -= n
 				return values
 
@@ -309,7 +307,6 @@ class KeyVM:
 
 			elif I == I_PAGESIZESET:
 				targetindex, size = popn(2)
-				print(targetindex, size)
 				page = self.get_page(domainpage[targetindex])
 				page.resize(size)
 
