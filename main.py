@@ -16,14 +16,18 @@ code = asm(code)
 
 print(code)
 
-vm = KeyVM(600)
+vm = KeyVM(750)
 image = vm.run_code(code)
 
-vm = KeyVM(1800)
-vm.run(image)
+print("RESUME")
 
+vm = KeyVM()
+image = vm.run(image, 100)
+
+"""
 #print(image)
 import zlib
 compressed = zlib.compress(image)
 #print(compressed)
 print(len(image), len(compressed))
+"""

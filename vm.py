@@ -130,10 +130,10 @@ class KeyVM:
 			else:
 				datapages += 1
 		a = f"Time: {self.prime_time_meter.value}\tMemory:{self.prime_memory_meter.value}\t"
-		b =	f"Domain:{len(self.get_page(self.active))}\tPages:{len(self.pages)}\t"
+		#b =	f"Domain:{len(self.get_page(self.active))}\tPages:{len(self.pages)}\t"
 		c =	f"DataPages:{datapages}\tKeyPages:{keypages}\tKeys:{keys}"
 
-		return a+b+c
+		return a+c
 
 	def create_id(self):
 		#should use dict with globally unique id, in case pages get deleted
@@ -199,11 +199,20 @@ class KeyVM:
 		return self.image()
 
 	def image(self):
-		return pickle.dumps([self.active, self.ids, self.pages])
+		return pickle.dumps([self.active, self.ids, self.pages, self.prime_memory_meter, self.prime_time_meter])
 
-	def run(self, image):
-		self.active, self.ids, self.pages = pickle.loads(image)
+	def run(self, image, timelimit=None, memorylimit=None):
+
+		self.active, self.ids, self.pages, self.prime_memory_meter, self.prime_time_meter = pickle.loads(image)
+
+		if timelimit is not None:
+			self.prime_time_meter.value = timelimit
+
+		if memorylimit is not None:
+			self.prime_memory_meter.value = memorylimit
+
 		self.run_active()
+		return self.image()
 
 	def run_active(self, debug=False):
 
@@ -219,6 +228,7 @@ class KeyVM:
 
 			# TODO what if this fails?
 			domainpage = self.get_page(current)
+			domainpage[D_STATE] = Key(S_ACTIVE)
 
 			try:
 				timekey = domainpage[D_TIME]
@@ -274,7 +284,7 @@ class KeyVM:
 
 				datapage = self.get_page(domainpage[D_DATA])
 
-				print(self, INSTRUCTIONNAMES[I])
+				print(self, ip, INSTRUCTIONNAMES[I], pointer)
 
 				reqs = REQUIREMENTS[I]
 
@@ -408,12 +418,13 @@ class KeyVM:
 					targetdomainkey = domainpage[domainkeyindex]
 					targetdomain = self.get_page(targetdomainkey)
 					transferkey = domainpage[transferkeyindex]
+					targetdomain[D_STATE] = Key(S_ACTIVE)
 					targetdomain[D_RECV] = transferkey
 					# check if targetdomain is keypage!
 					self.active = targetdomainkey
 					current = self.active
 
-				print("Stack:", stackpage[:pointerkey.value])
+				#print("Stack:", stackpage[:pointerkey.value])
 
 				if not jump:
 					ipkey.value += 1 + reqs[R_CARGS]
