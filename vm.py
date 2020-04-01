@@ -143,6 +143,10 @@ class KeyVM:
 
 	def domainkey_from_code(self, code):
 		domainkey = self.create_page(PG_KEYS, self.prime_memory_meter, DOMAINFIELDS)
+
+		self.prime_time_meter.keeper = domainkey
+		self.prime_memory_meter.keeper = domainkey
+
 		domainpage = self.get_page(domainkey)
 
 		domainpage[D_SELF] = domainkey
@@ -410,8 +414,8 @@ class KeyVM:
 					if timekey.keeper is not None:
 						keeper = self.get_page(timekey.keeper)
 
-						if keeper[D_STATE] != S_ERROR:
-							self.active = keeper
+						if keeper[D_STATE].value != S_ERROR:
+							self.active = timekey.keeper
 							current = self.active
 							break
 
