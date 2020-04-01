@@ -8,18 +8,17 @@ What makes this architecture unique is that its primary object of abstraction ar
 
 Instead of sending data to another process, you just send a copy of the key that allows it to access the data. Now, data is not the thing that matters, but the rights to it. This is a weird conceptual inversion or abstraction that takes some time to get used to. Since many concepts depend on each other it is difficult to write a description that never depends on later definitions. It is therefore useful to read the following several times.
 
-Everything in the KeyKOS architecture is derived from three things:
+Everything in this architecture is derived from two things:
 
 - Key: gives access to something, there are many different types of keys. If you don't have the key, you can't access it.
-- KeyList (also called Node in KeyKOS): a list of 16 keys. Pointed to by KeyListKeys
-- Page: a contiguous sequence of bytes of a fixed size, used to store code and data. Pointed to by PageKeys
+- Page: a contiguous sequence of either bytes *xor* keys of dynamic size, used to store code and data. Pointed to by PageKeys
 
 #### Domain
-A domain is just a KeyList that is structured in a way that it can run as a process. It points to a page to contains the code it executes and to another which it uses as data memory.
+A domain is just a KeyPage that is structured in a way that it can run as a process. It points to a page to contains the code it executes and two others which it uses as data memory and stack respectively.
 
-Domains pass control by sending a message to another domain by invoking a DomainKey. A message consists only of a KeyListKey which is copied to the called domains' KeyList. In this implementation, only one domain has control at a time (single-threaded architecture).
+Domains pass control to another domain by invoking a DomainKey. A message consists only of a single Key which is copied to the called domains' KeyPage. In this implementation, only one domain has control at a time (single-threaded architecture).
 
-It is possible to copy keys and send them to another domain. This is the way rights are distributed throughout the system. A domain has only 16 slots in its KeyList, but since (KeyList)Keys can refer to other KeyLists, it is possible to create a tree of keys that is as large as necessary.
+It is possible to copy keys and send them to another domain. This is the way rights are distributed throughout the system.
 
 #### Meters
 
