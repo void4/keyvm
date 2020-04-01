@@ -105,58 +105,6 @@ class Page:
 	def __len__(self):
 		return len(self.data)
 
-class SegmentKey(Key):
-	pass
-
-class Segment(KeyList):
-
-	def length(self, vm):
-		"""TODO: also cache this"""
-		total_length = 0
-		for key in self.data:
-			if isinstance(key, PageKey):
-				total_length += len(vm.get_page(key))
-			elif isinstance(key, SegmentKey):
-				total_length += vm.get_segment(key).length(vm)
-
-		return total_length
-
-	def __setitem__(self, key, value):
-		# TODO allow ints? DataKey?
-		assert isinstance(value, SegmentKey) or isinstance(value, PageKey), type(value)
-		if self.data[key] is not None:
-			#del self.data[key]#this actually deletes list entry!
-			self.__delitem__(key)
-		self.data[key] = value
-
-	def traverse(self, vm, offset, start=0):
-
-		# Because subsegment size may change (unless all parents get updated on change, hm)
-		# have to check lengths on every memory access
-		#TODO perhaps implement len() on Segment and Page keys
-
-		for key in self.data:
-			if isinstance(key, PageKey):
-				page = vm.get_page(key)
-				if offset - start < len(page):
-					return page[offset - start], None
-				else:
-					start += len(page)
-			elif isinstance(key, SegmentKey):
-				segment = vm.get_segment(key)
-				value, start = segment.traverse(vm, offset, start)
-				if start is None:
-					return value, start
-
-		return None, start
-
-	def read(self, vm, offset):
-		value, start = self.traverse(vm, offset)
-		if start is None:
-			return value
-
-		raise AssertionError("out of bounds memory access")
-
 def split(bits):
 	"""splits an 8 bit value into two 4 bit values"""
 	a = ((bits >> 4) & 0xf)
@@ -167,7 +115,7 @@ DK_STATE, DK_TIME, DK_MEMORY, DK_IP, DK_CODE, DK_POINTER, DK_STACK, DK_DATA, DK_
 DS_ACTIVE, DS_WAITING = range(2)
 
 class Domain:
-	def __init__(self, vm, keylistkey, time_meter_key, memory_meter_key, codesegmentkey, stacksegmentkey, datasegmentkey):
+	def __init__(self, vm, keylistkey, time_meter_key, memory_meter_key, codepagekey, stackpagekey, datapagekey):
 		self.keylistkey = keylistkey
 
 		keys = vm.get_keylist(self.keylistkey)
@@ -175,10 +123,10 @@ class Domain:
 		keys[DK_TIME] = time_meter_key
 		keys[DK_MEMORY] = memory_meter_key
 		keys[DK_IP] = Key(0)#IP
-		keys[DK_CODE] = codesegmentkey
+		keys[DK_CODE] = codepagekey
 		keys[DK_POINTER] = Key(0)#POINTER
-		keys[DK_STACK] = stacksegmentkey
-		keys[DK_DATA] = datasegmentkey
+		keys[DK_STACK] = stackpagekey
+		keys[DK_DATA] = datapagekey
 		keys[DK_WORKBENCH] = self.keylistkey
 		keys[DK_WORKBENCH2] = self.keylistkey
 
@@ -192,7 +140,6 @@ class KeyVM:
 		self.keylists = {}
 		self.domains = {}
 		self.pages = {}
-		self.segments = {}
 		self.prime_time_meter = MeterKey([None, None, timelimit])
 		self.prime_memory_meter = MeterKey([None, None, memorylimit])
 
@@ -227,7 +174,7 @@ class KeyVM:
 		assert isinstance(pagekey, PageKey)
 		return self.pages[pagekey.value]
 
-	def create_domain(self, time_meter_key, memory_meter_key, codesegmentkey, datasegmentkey=None, stacksegmentkey=None, keylistkey=None):
+	def create_domain(self, time_meter_key, memory_meter_key, codepagekey, datapagekey=None, stackpagekey=None, keylistkey=None):
 		if keylistkey is None:
 			keylistkey = self.create_keylist()#masterkey
 
@@ -245,15 +192,6 @@ class KeyVM:
 	def get_domain(self, domainkey):
 		assert isinstance(domainkey, DomainKey)
 		return self.domains[domainkey.value]
-
-	def create_segment(self):
-		segmentkey = SegmentKey(self.create_id())
-		self.segments[segmentkey.value] = Segment()
-		return segmentkey
-
-	def get_segment(self, segmentkey):
-		assert isinstance(segmentkey, SegmentKey)
-		return self.segments[segmentkey.value]
 
 	def viz(self, keylistkey, depth=0, visited=None):
 		if visited is None:
@@ -347,25 +285,24 @@ class KeyVM:
 				meterkey.value[MK_RESOURCES] -= STEPCOST
 
 
-			codesegment = self.get_segment(keys[DK_CODE])
+			codepage = self.get_page(keys[DK_CODE])
 			ipkey = keys[DK_IP]
 			ip = ipkey.value
 
-			if ip >= len(codesegment):
+			if ip >= len(codepage):
 				# TODO move up
 				if timekey.value[MK_PARENT] is None:
 					break
 				continue
 
-			instruction = codesegment[ip]
+			instruction = codepage[ip]
 
-			stacksegment = self.get_segment(keys[DK_STACK])
+			stackpage = self.get_page(keys[DK_STACK])
 
 			pointerkey = keys[DK_POINTER]
 			pointer = pointerkey.value
 
-			# TODO segment_or_page
-			data = self.get_segment(keys[DK_DATA])
+			data = self.get_page(keys[DK_DATA])
 
 			#print(data.data)
 
@@ -473,17 +410,6 @@ class KeyVM:
 					#???
 					pass
 				pass
-
-			elif symbol == "s":
-				"""create segment/upgrade keylist"""
-				# only on empty keyslot? upgrading/preparing existing keylist?
-				# meterkeyindex missing
-				slotindex, _ = split(data[pointer])
-				if keys[slotindex] is None:
-					keys[slotindex] = self.create_segment()
-				else:
-					#???
-					pass
 
 			if not jump:
 				ipkey.value += 1
