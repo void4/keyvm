@@ -16,8 +16,8 @@ code = asm(code)
 
 print(code)
 
-vm = KeyVM(750)
-image = vm.run_code(code)
+vm = KeyVM()
+image = vm.run_code(code, 750)
 
 print("RESUME")
 

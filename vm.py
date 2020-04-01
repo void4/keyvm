@@ -110,10 +110,10 @@ class VMException(Exception):
 	pass
 
 class KeyVM:
-	def __init__(self, timelimit=-1, memorylimit=-1):
+	def __init__(self):
 		self.ids = 0
-		self.prime_time_meter = MeterKey(timelimit, None)
-		self.prime_memory_meter = MeterKey(memorylimit, None)
+		self.prime_time_meter = MeterKey(-1, None)
+		self.prime_memory_meter = MeterKey(-1, None)
 		self.pages = {}
 		self.active = None#assume single-threaded
 
@@ -192,7 +192,14 @@ class KeyVM:
 		for i in range(len(code)):
 			codepage[i] = code[i]
 
-	def run_code(self, code, debug=False):
+	def run_code(self, code, timelimit=None, memorylimit=None, debug=False):
+
+		if timelimit is not None:
+			self.prime_time_meter.value = timelimit
+
+		if memorylimit is not None:
+			self.prime_memory_meter.value = memorylimit
+
 		domainkey = self.domainkey_from_code(code)
 		self.active = domainkey
 		self.run_active()
