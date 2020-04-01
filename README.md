@@ -16,9 +16,9 @@ Everything in this architecture is derived from two things:
 #### Domain
 A domain is just a KeyPage that is structured in a way that it can run as a process. It points to a page to contains the code it executes and two others which it uses as data memory and stack respectively.
 
-Domains pass control to another domain by invoking a DomainKey. A message consists only of a single Key which is copied to the called domains' KeyPage. In this implementation, only one domain has control at a time (single-threaded architecture).
+Domains pass control to each other by invoking a DomainKey. A message contains only a single Key which is copied to the called domains' KeyPage. The called domain can then access the (indirectly) referred to pages with that key. This is the way data and rights are distributed throughout the system.
 
-It is possible to copy keys and send them to another domain. This is the way rights are distributed throughout the system.
+In this implementation, only one domain has control at a time (single-threaded architecture).
 
 #### Meters
 
@@ -43,11 +43,11 @@ More info here:
 
 ### Main actions
 
-- copy a Key (within the same or to another KeyList)
-- create a new KeyList
-- create a new domain from a prepopulated KeyList
-- attenuate a Key (e.g. PageKey -> PageReadKey)
-- send a message and transfer control to another domain
+- create a new KeyPage or DataPage
+- copy a Key (within the same or to another KeyPage)
+- attenuate a Key (weaken its rights, e.g. PageKey -> PageReadKey)
+- send a message and transfer control to another domain by calling the PageKey that refers to it
+- create a new domain from a prepopulated KeyPage
 
 ## Usage
 
