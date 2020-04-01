@@ -49,9 +49,15 @@ More info here:
 - send a message and transfer control to another domain by calling the PageKey that refers to it
 - create a new domain from a prepopulated KeyPage
 
+## Installation
+
+`pip install -r requirements.txt`
+
 ## Usage
 
 `python main.py`
+
+Tested with Python 3.8.2
 
 ## Notes
 
