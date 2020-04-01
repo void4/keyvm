@@ -1,4 +1,4 @@
-from main import KeyVM
+from ..main import KeyVM
 
 vm = KeyVM()
 page1key = vm.create_page(vm.prime_memory_meter)

@@ -163,39 +163,24 @@ def split(bits):
 	b = (bits & 0xf)
 	return a,b
 
-DK_STATE, DK_TIME, DK_IP, DK_CODE, DK_POINTER, DK_DATA, DK_WORKBENCH, DK_WORKBENCH2, DK_MEMORY = range(9)
+DK_STATE, DK_TIME, DK_MEMORY, DK_IP, DK_CODE, DK_POINTER, DK_STACK, DK_DATA, DK_WORKBENCH, DK_WORKBENCH2 = range(10)
 DS_ACTIVE, DS_WAITING = range(2)
 
 class Domain:
-	def __init__(self, vm, keylistkey, time_meter_key, memory_meter_key, codepagekey, datapagekey):
+	def __init__(self, vm, keylistkey, time_meter_key, memory_meter_key, codesegmentkey, stacksegmentkey, datasegmentkey):
 		self.keylistkey = keylistkey
 
 		keys = vm.get_keylist(self.keylistkey)
 		keys[DK_STATE] = Key(0)#STATE
 		keys[DK_TIME] = time_meter_key
+		keys[DK_MEMORY] = memory_meter_key
 		keys[DK_IP] = Key(0)#IP
-		keys[DK_CODE] = codepagekey
+		keys[DK_CODE] = codesegmentkey
 		keys[DK_POINTER] = Key(0)#POINTER
-		keys[DK_DATA] = datapagekey
+		keys[DK_STACK] = stacksegmentkey
+		keys[DK_DATA] = datasegmentkey
 		keys[DK_WORKBENCH] = self.keylistkey
 		keys[DK_WORKBENCH2] = self.keylistkey
-		keys[DK_MEMORY] = memory_meter_key
-
-		# Assume immutable code? Or update on codepagekey change
-		codepage = vm.get_page(codepagekey)
-
-		self.jmpmap = {}
-		jmplst = []
-		for ci, cd in enumerate(codepage):
-			c = SYMBOLS[cd]
-			if c == "[":
-				jmplst.append(ci)
-			elif c == "]":
-				if len(jmplst) == 0:
-					break
-				matching = jmplst.pop(-1)
-				self.jmpmap[ci] = matching
-				self.jmpmap[matching] = ci + 1
 
 	def associated(self, vm, keyindex):
 		keys = vm.get_keylist(self.keylistkey)
@@ -242,9 +227,11 @@ class KeyVM:
 		assert isinstance(pagekey, PageKey)
 		return self.pages[pagekey.value]
 
-	def create_domain(self, time_meter_key, memory_meter_key, codepagekey, keylistkey=None):
+	def create_domain(self, time_meter_key, memory_meter_key, codesegmentkey, datasegmentkey=None, stacksegmentkey=None, keylistkey=None):
 		if keylistkey is None:
 			keylistkey = self.create_keylist()#masterkey
+
+
 		datapagekey = self.create_page(memory_meter_key)
 
 		#TODO if codepagekey is None or datapagekey is None, revert
@@ -252,7 +239,7 @@ class KeyVM:
 		domain = Domain(self, keylistkey, time_meter_key, memory_meter_key, codepagekey, datapagekey)
 		domainkey = DomainKey(self.create_id())
 		self.domains[domainkey.value] = domain
-
+		# set domain bit on keylist datastructure
 		return domainkey
 
 	def get_domain(self, domainkey):
@@ -323,8 +310,6 @@ class KeyVM:
 
 		current = self.get_domain(domainkey)
 
-
-
 		while True:#current.associated(self, DK_STATE).value == DS_ACTIVE:
 			# do a step
 			# Ascend the meter chain
@@ -361,21 +346,26 @@ class KeyVM:
 			for meterkey in chain:
 				meterkey.value[MK_RESOURCES] -= STEPCOST
 
-			code = self.get_page(keys[DK_CODE])
+
+			codesegment = self.get_segment(keys[DK_CODE])
 			ipkey = keys[DK_IP]
 			ip = ipkey.value
 
-			if ip >= len(code):
+			if ip >= len(codesegment):
 				# TODO move up
 				if timekey.value[MK_PARENT] is None:
 					break
 				continue
-			instruction = code[ip]
+
+			instruction = codesegment[ip]
+
+			stacksegment = self.get_segment(keys[DK_STACK])
 
 			pointerkey = keys[DK_POINTER]
 			pointer = pointerkey.value
 
-			data = self.get_page(keys[DK_DATA])
+			# TODO segment_or_page
+			data = self.get_segment(keys[DK_DATA])
 
 			#print(data.data)
 
@@ -384,26 +374,6 @@ class KeyVM:
 
 			jump = False
 
-			if symbol == ">":
-				pointerkey.value = (pointer+1)%PAGESIZE
-			elif symbol == "<":
-				pointerkey.value = (pointer-1)%PAGESIZE
-			elif symbol == "+":
-				data[pointer] = (data[pointer]+1)%CELLSIZE
-			elif symbol == "-":
-				data[pointer] = (data[pointer]-1)%CELLSIZE
-			elif symbol == "²":
-				data[pointer] = (data[pointer]<<1)%CELLSIZE
-			elif symbol == "½":
-				data[pointer] = (data[pointer]>>1)%CELLSIZE
-			elif symbol == "[":
-				if data[pointer] == 0:
-					#if ip in current.jmpmap:
-					#try: except KeyError
-					ipkey.value = current.jmpmap[ip]
-					jump = True
-			elif symbol == "]":
-				if data[pointer] != 0:
 					ipkey.value = current.jmpmap[ip]
 					jump = True
 
