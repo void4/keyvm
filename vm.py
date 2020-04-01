@@ -3,7 +3,6 @@ import pickle
 from instructions import *
 
 CELLSIZE = 256
-MK_PARENT, MK_CONTROLLER, MK_RESOURCES = range(3)
 
 class Key:
 	def __init__(self, value):
@@ -30,18 +29,25 @@ class PageReadKey(Key):
 
 # Parent meter, controlling domain, resources
 class MeterKey(Key):
+
+	def __init__(self, value, parent, keeper=None):
+		self.value = value
+		self.parent = parent
+		self.keeper = keeper
+		self.refs = 1
+
 	def use(self, amount):
-		if self.value[MK_RESOURCES] >= 0 and self.value[MK_RESOURCES] < amount:
+		if self.value >= 0 and self.value < amount:
 			return False
 		else:
-			self.value[MK_RESOURCES] -= amount
+			self.value -= amount
 			return True
 
 	def attenuate(self, option):
 		if option == 0:
 			return self#still return copy?
 		else:
-			return MeterKey([self, self.value[1], self.value[MK_RESOURCES]//option])
+			return MeterKey(self.value//option, self)
 
 PG_DATA, PG_KEYS = range(2)
 
@@ -99,17 +105,19 @@ class PageContext:
 	def __iter__(self):
 		return iter(self.page.data)
 
+class VMException(Exception):
+	pass
 
 class KeyVM:
 	def __init__(self, timelimit=-1, memorylimit=-1):
 		self.ids = 0
-		self.prime_time_meter = MeterKey([None, None, timelimit])
-		self.prime_memory_meter = MeterKey([None, None, memorylimit])
+		self.prime_time_meter = MeterKey(timelimit, None)
+		self.prime_memory_meter = MeterKey(memorylimit, None)
 		self.pages = {}
 		self.active = None#assume single-threaded
 
 	def __repr__(self):
-		return f"Time: {self.prime_time_meter.value[2]}\tMemory:{self.prime_memory_meter.value[2]}\tDomain:{len(self.get_page(self.active))}\tPages:{len(self.pages)}"
+		return f"Time: {self.prime_time_meter.value}\tMemory:{self.prime_memory_meter.value}\tDomain:{len(self.get_page(self.active))}\tPages:{len(self.pages)}"
 
 	def create_id(self):
 		#should use dict with globally unique id, in case pages get deleted
@@ -139,7 +147,7 @@ class KeyVM:
 
 		domainpage[D_SELF] = domainkey
 
-		domainpage[D_STATE] = Key(0)
+		domainpage[D_STATE] = Key(S_ACTIVE)
 		domainpage[D_TIME] = self.prime_time_meter
 		domainpage[D_MEMORY] = self.prime_memory_meter
 		domainpage[D_IP] = Key(0)
@@ -181,7 +189,7 @@ class KeyVM:
 
 		current = self.active
 
-		while True:#current.associated(self, D_STATE).value == DS_ACTIVE:
+		while True:#current.associated(self, D_STATE).value == S_ACTIVE:
 			# do a step
 			# Ascend the meter chain
 			#print(self)
@@ -189,196 +197,229 @@ class KeyVM:
 			if current is None:
 				break
 
+			# TODO what if this fails?
 			domainpage = self.get_page(current)
 
-			timekey = domainpage[D_TIME]
-			chain = [timekey]
+			try:
+				timekey = domainpage[D_TIME]
+				chain = [timekey]
 
-			if debug:
-				self.viz(current.keylistkey)
+				if debug:
+					self.viz(current.keylistkey)
 
-			while True:
-				parentkey = chain[-1].value[MK_PARENT]
-				if parentkey is None:
-					break
-				chain.append(parentkey)
-
-			#print([str(k) for k in chain])
-
-			STEPCOST = 1
-			for meterkey in chain[::-1]:
-				if meterkey.value[MK_RESOURCES] <= STEPCOST:
-					parentmeterkey = meterkey.value[MK_PARENT]
-					if parentmeterkey is None:
+				while True:
+					parentkey = chain[-1].parent
+					if parentkey is None:
 						break
-					current = parentmeterkey.value[MK_CONTROLLER]
+					chain.append(parentkey)
+
+				#print([str(k) for k in chain])
+
+				STEPCOST = 1
+				for meterkey in chain[::-1]:
+					if meterkey.value <= STEPCOST:
+						parentmeterkey = meterkey.parent
+						if parentmeterkey is None:
+							break
+						current = parentmeterkey.keeper
+						continue
+
+				for meterkey in chain:
+					meterkey.value -= STEPCOST
+
+
+				codepage = self.get_page(domainpage[D_CODE])
+				# TODO assert datapage
+
+				ipkey = domainpage[D_IP]
+				ip = ipkey.value
+
+				if ip >= len(codepage):
+					# TODO move up
+					if timekey.value[MK_PARENT] is None:
+						break
 					continue
 
-			for meterkey in chain:
-				meterkey.value[MK_RESOURCES] -= STEPCOST
+				I = codepage[ip]
+
+				stackpage = self.get_page(domainpage[D_STACK])
+
+				pointerkey = domainpage[D_POINTER]
+				pointer = pointerkey.value
+
+				datapage = self.get_page(domainpage[D_DATA])
+
+				print(self, INSTRUCTIONNAMES[I])
+
+				reqs = REQUIREMENTS[I]
+
+				jump = False
+
+				def codearg():
+					return codepage[ip+1]
+
+				def codeargs(n):
+					return codepage[ip+1:ip+1+n]
+
+				def pop():
+					if pointerkey.value == 0:
+						raise VMException("StackUnderflow")
+					print(stackpage, pointerkey.value)
+					value = stackpage[pointerkey.value-1]
+					stackpage[pointerkey.value-1] = 0
+					pointerkey.value -= 1
+					return value
+
+				def popn(n):
+					if pointerkey.value < n:
+						raise VMException("StackUnderflow")
+					values = []
+					for index in range(pointerkey.value-n, pointerkey.value, 1):
+						values.append(stackpage[index])
+						stackpage[index] = 0
+					pointerkey.value -= n
+					return values
+
+				def push(v):
+					if pointerkey.value + 1 >= len(stackpage):
+						raise VMException("StackOverflow")
+					stackpage[pointerkey.value] = v
+					pointerkey.value += 1
 
 
-			codepage = self.get_page(domainpage[D_CODE])
-			# TODO assert datapage
+				def pushn():
+					pass
 
-			ipkey = domainpage[D_IP]
-			ip = ipkey.value
+				if I == I_PUSH:
+					arg = codearg()
+					push(arg)
 
-			if ip >= len(codepage):
-				# TODO move up
-				if timekey.value[MK_PARENT] is None:
-					break
-				continue
+				elif I == I_ADD:
+					a,b = popn(2)
+					push(a+b)
 
-			I = codepage[ip]
+				elif I == I_SUB:
+					a,b = popn(2)
+					push(a-b)
 
-			stackpage = self.get_page(domainpage[D_STACK])
+				elif I == I_MUL:
+					a,b = popn(2)
+					push(a*b)
 
-			pointerkey = domainpage[D_POINTER]
-			pointer = pointerkey.value
+				elif I == I_DIV:
+					a,b = popn(2)
+					if b == 0:
+						raise VMException("DivisionByZero")
+					push(a//b)
 
-			datapage = self.get_page(domainpage[D_DATA])
+				elif I == I_MOD:
+					if b == 0:
+						raise VMException("DivisionByZero")
+					a,b = popn(2)
+					push(a%b)
 
-			print(self, INSTRUCTIONNAMES[I])
+				elif I == I_AND:
+					a,b = popn(2)
+					push(a&b)
 
-			reqs = REQUIREMENTS[I]
+				elif I == I_OR:
+					a,b = popn(2)
+					push(a|b)
 
-			jump = False
+				elif I == I_XOR:
+					a,b = popn(2)
+					push(a^b)
 
-			def codearg():
-				return codepage[ip+1]
+				elif I == I_NOT:
+					a = pop()
+					push(~a)
 
-			def codeargs(n):
-				return codepage[ip+1:ip+1+n]
+				elif I == I_PAGECREATE:
+					targetindex, type, meterkeyindex, size = popn(4)
+					domainpage[targetindex] = self.create_page(type, domainpage[meterkeyindex], size)
 
-			def pop():
-				if pointerkey.value == 0:
-					raise Exception("StackUnderflow")
-				print(stackpage, pointerkey.value)
-				value = stackpage[pointerkey.value-1]
-				stackpage[pointerkey.value-1] = 0
-				pointerkey.value -= 1
-				return value
+				elif I == I_PAGETYPE:
+					sourceindex = pop()
+					page = self.get_page(domainpage[sourceindex])
+					push(page.type)
 
-			def popn(n):
-				if pointerkey.value < n:
-					raise Exception("StackUnderflow")
-				values = []
-				for index in range(pointerkey.value-n, pointerkey.value, 1):
-					values.append(stackpage[index])
-					stackpage[index] = 0
-				pointerkey.value -= n
-				return values
+				elif I == I_PAGESIZEGET:
+					sourceindex = pop()
+					page = self.get_page(domainpage[sourceindex])
+					push(len(page))
 
-			def push(v):
-				if pointerkey.value + 1 >= len(stackpage):
-					raise Exception("StackOverflow")
-				stackpage[pointerkey.value] = v
-				pointerkey.value += 1
+				elif I == I_PAGESIZESET:
+					targetindex, size = popn(2)
+					page = self.get_page(domainpage[targetindex])
+					page.resize(size)
 
+				elif I == I_COPYKEY:
+					targetpagekeyindex, targetpageindex, sourcepagekeyindex, sourcepageindex = popn(4)
+					sourcepage = self.get_page(domainpage[sourcepagekeyindex])
+					key = sourcepage[sourcepageindex]
+					targetpage = self.get_page(domainpage[targetpagekeyindex])
+					targetpage[targetpageindex] = key
 
-			def pushn():
-				pass
+				elif I == I_ATTENUATE:
+					targetpagekeyindex, targetpageindex, sourcepagekeyindex, sourcepageindex, type = popn(5)
+					sourcepage = self.get_page(domainpage[sourcepagekeyindex])
+					key = sourcepage[sourcepageindex]
+					targetpage = self.get_page(domainpage[targetpagekeyindex])
+					attenuated_key = key.attenuate(type)
+					targetpage[targetpageindex] = attenuated_key
 
-			if I == I_PUSH:
-				arg = codearg()
-				push(arg)
-
-			elif I == I_ADD:
-				a,b = popn(2)
-				push(a+b)
-
-			elif I == I_SUB:
-				a,b = popn(2)
-				push(a-b)
-
-			elif I == I_MUL:
-				a,b = popn(2)
-				push(a*b)
-
-			elif I == I_DIV:
-				a,b = popn(2)
-				if b == 0:
-					raise Exception("DivisionByZero")
-				push(a//b)
-
-			elif I == I_MOD:
-				if b == 0:
-					raise Exception("DivisionByZero")
-				a,b = popn(2)
-				push(a%b)
-
-			elif I == I_AND:
-				a,b = popn(2)
-				push(a&b)
-
-			elif I == I_OR:
-				a,b = popn(2)
-				push(a|b)
-
-			elif I == I_XOR:
-				a,b = popn(2)
-				push(a^b)
-
-			elif I == I_NOT:
-				a = pop()
-				push(~a)
-
-			elif I == I_PAGECREATE:
-				targetindex, type, meterkeyindex, size = popn(4)
-				domainpage[targetindex] = self.create_page(type, domainpage[meterkeyindex], size)
-
-			elif I == I_PAGETYPE:
-				sourceindex = pop()
-				page = self.get_page(domainpage[sourceindex])
-				push(page.type)
-
-			elif I == I_PAGESIZEGET:
-				sourceindex = pop()
-				page = self.get_page(domainpage[sourceindex])
-				push(len(page))
-
-			elif I == I_PAGESIZESET:
-				targetindex, size = popn(2)
-				page = self.get_page(domainpage[targetindex])
-				page.resize(size)
-
-			elif I == I_COPYKEY:
-				targetpagekeyindex, targetpageindex, sourcepagekeyindex, sourcepageindex = popn(4)
-				sourcepage = self.get_page(domainpage[sourcepagekeyindex])
-				key = sourcepage[sourcepageindex]
-				targetpage = self.get_page(domainpage[targetpagekeyindex])
-				targetpage[targetpageindex] = key
-
-			elif I == I_ATTENUATE:
-				targetpagekeyindex, targetpageindex, sourcepagekeyindex, sourcepageindex, type = popn(5)
-				sourcepage = self.get_page(domainpage[sourcepagekeyindex])
-				key = sourcepage[sourcepageindex]
-				targetpage = self.get_page(domainpage[targetpagekeyindex])
-				attenuated_key = key.attenuate(type)
-				targetpage[targetpageindex] = attenuated_key
-
-			elif I == I_JUMP:
-				jumptarget = pop()
-				ipkey.value = jumptarget
-				jump = True
-
-			elif I == I_JUMPIF:
-				jumptarget, condition = popn(2)
-				if condition:
+				elif I == I_JUMP:
+					jumptarget = pop()
 					ipkey.value = jumptarget
 					jump = True
 
-			elif I == I_CALL:
-				targetdomainkeyindex, transferkeyindex = popn(2)
-				targetdomainkey = domainpage[domainkeyindex]
-				targetdomain = self.get_page(targetdomainkey)
-				transferkey = domainpage[transferkeyindex]
-				targetdomain[D_RECV] = transferkey
-				self.active = targetdomainkey
-				current = self.active
+				elif I == I_JUMPIF:
+					jumptarget, condition = popn(2)
+					if condition:
+						ipkey.value = jumptarget
+						jump = True
 
-			print("Stack:", stackpage[:pointerkey.value])
+				elif I == I_CALL:
+					targetdomainkeyindex, transferkeyindex = popn(2)
+					targetdomainkey = domainpage[domainkeyindex]
+					targetdomain = self.get_page(targetdomainkey)
+					transferkey = domainpage[transferkeyindex]
+					targetdomain[D_RECV] = transferkey
+					# check if targetdomain is keypage!
+					self.active = targetdomainkey
+					current = self.active
 
-			if not jump:
-				ipkey.value += 1 + reqs[R_CARGS]
+				print("Stack:", stackpage[:pointerkey.value])
+
+				if not jump:
+					ipkey.value += 1 + reqs[R_CARGS]
+
+			except VMException as e:
+				print(e)
+				# XXX make sure this domainpage is actually the most recent one
+				domainpage[D_STATE] = Key(S_ERROR)
+
+				timekey = domainpage[D_TIME]
+
+				EXIT_VM = False
+
+				# check domain repair key
+				# ensure control returns to caller or meter parent
+				while True:
+
+					if timekey.keeper is not None:
+						keeper = self.get_page(timekey.keeper)
+
+						if keeper[D_STATE] != S_ERROR:
+							self.active = keeper
+							current = self.active
+							break
+
+					if timekey.parent is None:
+						EXIT_VM = True
+						break
+
+					timekey = timekey.parent
+
+				if EXIT_VM:
+					break
