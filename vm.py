@@ -234,15 +234,20 @@ class KeyVM:
 					chain.append(parentkey)
 
 				#print([str(k) for k in chain])
-
+				#print(chain)
+				EXIT_VM = False
 				STEPCOST = 1
 				for meterkey in chain[::-1]:
 					if meterkey.value <= STEPCOST:
 						parentmeterkey = meterkey.parent
 						if parentmeterkey is None:
+							EXIT_VM = True
 							break
 						current = parentmeterkey.keeper
 						continue
+
+				if EXIT_VM:
+					break
 
 				for meterkey in chain:
 					meterkey.value -= STEPCOST
@@ -284,7 +289,6 @@ class KeyVM:
 				def pop():
 					if pointerkey.value == 0:
 						raise VMException("StackUnderflow")
-					print(stackpage, pointerkey.value)
 					value = stackpage[pointerkey.value-1]
 					stackpage[pointerkey.value-1] = 0
 					pointerkey.value -= 1

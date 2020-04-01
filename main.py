@@ -16,8 +16,11 @@ code = asm(code)
 
 print(code)
 
-vm = KeyVM()
+vm = KeyVM(600)
 image = vm.run_code(code)
+
+vm = KeyVM(1800)
+vm.run(image)
 
 #print(image)
 import zlib
