@@ -50,54 +50,14 @@ More info here:
 - attenuate a Key (e.g. PageKey -> PageReadKey)
 - send a message and transfer control to another domain
 
-### Keyfuck-Specific
-A domain has two "workbenches". This weird setup is required to make the brainfuck-semantics as elegant as possible.
-
-- switch workbenches (optional?, implement on a higher level?)
-- reset the workbench to the current domain KeyList
-- make a workbench point to a KeyList pointed to by a KeyListKey in the current KeyList (traversing down)
-
 ## Usage
 
 `python main.py`
 
 ## Notes
 
-Using a key referring to a list of keys is elegant
-However, the implementation is not.
-Especially not in a brainfuck-like language
+This is a combination of:
 
-indirection etc.
+https://github.com/void4/keyfuck/ - Which had a key-only design, but only ultra-simple brainfuck semantics. This also used the KeyKOS architecture of Node/KeyLists of size 16, tree construction with workbenches to access a larger number of keys.
 
-"bundle of rights"
-
-construct new keylist
-delete key
-traverse key to keylist
-attenuate
-delete keylist - OS has to track lost keys!
-send message/transfer key
-
-owner-only-readable keys (meters)
-
-total key max? 256
-
-possible to replace without deleting key? for now, yes.
-
-how to transfer data between two pages? memcpy? or just move/copy through code for constant op time?
-
-Just use memory-limit, not memory-time
--> do not delete time=0 domains, if they still have memory
--> manual deletion, no automatic garbage collection except unreferenced keys
-
-keyspace. the final frontier.
-
-DomainKey: Make this the same as KeyListKey? Nopenopenope: otherwise every caller could modify the called domain -> "DomainSendKey" or something
--> yeah, now i understand why KeyKOS has DomainKey and GateKey
-
-KeyListKey = DomainKey
-DomainKey = GateKey
-
-make sure Domain key has no read or write access beyond sending message
-
-should domain be able to call itself?
+https://github.com/void4/keyvm-old - Which had a stack based VM, but domains where not exclusively keys, but also contained a fixed code memory.
