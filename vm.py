@@ -1,3 +1,7 @@
+import pickle
+
+from instructions import *
+
 CELLSIZE = 256
 MK_PARENT, MK_CONTROLLER, MK_RESOURCES = range(3)
 
@@ -72,9 +76,9 @@ class Page:
 	def __iter__(self):
 		return iter(self.data)
 
-DOMAINFIELDS = 10
-D_STATE, D_TIME, D_MEMORY, D_IP, D_CODE, D_POINTER, D_STACK, D_DATA, D_WORKBENCH, D_WORKBENCH2 = range(DOMAINFIELDS)
-DS_ACTIVE, DS_WAITING = range(2)
+DOMAINFIELDS = 8
+D_STATE, D_TIME, D_MEMORY, D_IP, D_CODE, D_POINTER, D_STACK, D_DATA = range(DOMAINFIELDS)
+DS_ACTIVE, DS_WAITING = range(2)#ommit these? global active index in image?
 
 class KeyVM:
 	def __init__(self, timelimit=-1, memorylimit=-1):
@@ -82,9 +86,10 @@ class KeyVM:
 		self.prime_time_meter = MeterKey([None, None, timelimit])
 		self.prime_memory_meter = MeterKey([None, None, memorylimit])
 		self.pages = {}
+		self.active = None#assume single-threaded
 
 	def __repr__(self):
-		return f"Time: {self.prime_time_meter.value[2]}\tMemory:{self.prime_memory_meter.value[2]}\tKeylists:{len(self.keylists)}\tDomains:{len(self.domains)}\tPages:{len(self.pages)}"
+		return f"Time: {self.prime_time_meter.value[2]}\tMemory:{self.prime_memory_meter.value[2]}\tDomain:{len(self.get_page(self.active))}\tPages:{len(self.pages)}"
 
 	def create_id(self):
 		#should use dict with globally unique id, in case pages get deleted
@@ -104,29 +109,26 @@ class KeyVM:
 		assert isinstance(pagekey, PageKey)
 		return self.pages[pagekey.value]
 
-	def domainkey_from_code(code):
-		domainkey = vm.create_page(PG_KEYS, vm.prime_memory_meter, DOMAINFIELDS)
-		domainpage = vm.get_page(domainkey)
+	def domainkey_from_code(self, code):
+		domainkey = self.create_page(PG_KEYS, self.prime_memory_meter, DOMAINFIELDS)
+		domainpage = self.get_page(domainkey)
 
 		domainpage[D_STATE] = Key(0)
-		domainpage[D_TIME] = time_meter_key
-		domainpage[D_MEMORY] = memory_meter_key
+		domainpage[D_TIME] = self.prime_time_meter
+		domainpage[D_MEMORY] = self.prime_memory_meter
 		domainpage[D_IP] = Key(0)
 
-		codepagekey = vm.create_page(PG_DATA, vm.prime_memory_meter, len(code))
+		codepagekey = self.create_page(PG_DATA, self.prime_memory_meter, len(code))
 		self.copycode(codepagekey, code)
 		domainpage[D_CODE] = codepagekey
 
 		domainpage[D_POINTER] = Key(0)
 
-		stackpagekey = vm.create_page(PG_DATA, vm.prime_memory_meter, 256)
+		stackpagekey = self.create_page(PG_DATA, self.prime_memory_meter, 256)
 		domainpage[D_STACK] = stackpagekey
 
-		datapagekey = vm.create_page(PG_DATA, vm.prime_memory_meter, 256)
+		datapagekey = self.create_page(PG_DATA, self.prime_memory_meter, 256)
 		domainpage[D_DATA] = datapagekey
-
-		domainpage[D_WORKBENCH] = domainkey
-		domainpage[D_WORKBENCH2] = domainkey
 
 		return domainkey
 
@@ -136,23 +138,34 @@ class KeyVM:
 		for i in range(len(code)):
 			codepage[i] = code[i]
 
-	def run(self, code, debug=False):
+	def run_code(self, code, debug=False):
 		domainkey = self.domainkey_from_code(code)
-		self.run_domainkey(domainkey)
+		self.active = domainkey
+		self.run_active()
+		return self.image()
 
-	def run_domainkey(self, domainkey, debug=False):
+	def image(self):
+		return pickle.dumps([self.active, self.ids, self.pages])
+
+	def run(self, image):
+		self.active, self.ids, self.pages = pickle.loads(image)
+		self.run_active()
+
+	def run_active(self, debug=False):
+
+		current = self.active
 
 		while True:#current.associated(self, D_STATE).value == DS_ACTIVE:
 			# do a step
 			# Ascend the meter chain
-			print(self)
+			#print(self)
 			# TODO investigate this
 			if current is None:
 				break
 
-			keys = self.get_keylist(current.keylistkey)
+			domainpage = self.get_page(current)
 
-			timekey = keys[D_TIME]
+			timekey = domainpage[D_TIME]
 			chain = [timekey]
 
 			if debug:
@@ -179,8 +192,10 @@ class KeyVM:
 				meterkey.value[MK_RESOURCES] -= STEPCOST
 
 
-			codepage = self.get_page(keys[D_CODE])
-			ipkey = keys[D_IP]
+			codepage = self.get_page(domainpage[D_CODE])
+			# TODO assert datapage
+
+			ipkey = domainpage[D_IP]
 			ip = ipkey.value
 
 			if ip >= len(codepage):
@@ -189,121 +204,65 @@ class KeyVM:
 					break
 				continue
 
-			instruction = codepage[ip]
+			I = codepage[ip]
 
-			stackpage = self.get_page(keys[D_STACK])
+			stackpage = self.get_page(domainpage[D_STACK])
 
-			pointerkey = keys[D_POINTER]
+			pointerkey = domainpage[D_POINTER]
 			pointer = pointerkey.value
 
-			data = self.get_page(keys[D_DATA])
+			datapage = self.get_page(domainpage[D_DATA])
 
 			#print(data.data)
 
-			symbol = SYMBOLS[instruction]
-			print(symbol, end="")
+			print(self, INSTRUCTIONNAMES[I])
+
+			reqs = REQUIREMENTS[I]
 
 			jump = False
 
-					ipkey.value = current.jmpmap[ip]
-					jump = True
+			#		ipkey.value =
+			#		jump = True
+			"""
+			extend/change page size
+			getkey domainpage[targetindex] <- domainpage[keyindex]:keylistkey[secondaryindex]
+			putkey reverse of ^
 
-			elif symbol == "r":
-				# root, reset workbench to domain keylistkey
-				keys[D_WORKBENCH] = current.keylistkey
+			pagecreate
+			pagetype: domainpage[keyindex] -> stack.push(page.type)
+			pagesize: domainpage[keyindex] -> stack.push(len(page))
 
-			elif symbol == "t":
-				# Traverse workbench down
-				assert data[pointer] < 16
-				key = keys[data[pointer]]
-				assert isinstance(key, KeyListKey)
-				keys[D_WORKBENCH] = key
+			"""
 
-			elif symbol == "l":
-				# Create new KeyList in workbench
-				assert data[pointer] < 16
-				newkeylistkey = self.create_keylist()
-				wb = self.get_keylist(keys[D_WORKBENCH])
-				wb[data[pointer]] = newkeylistkey
+			def codearg():
+				return codepage[ip+1]
 
-			elif symbol == "c":
-				# Copy key
-				wb1 = self.get_keylist(keys[D_WORKBENCH])
-				wb2 = self.get_keylist(keys[D_WORKBENCH2])
+			def codeargs(n):
+				return codepage[ip+1:ip+1+n]
 
-				indices = data[pointer]
-				wb1i, wb2i = split(indices)
-				#print(wb1[wb1i])
-				wb2[wb2i] = wb1[wb1i]
+			def pop():
+				if pointerkey.value == 0:
+					raise Exception("StackUnderflow")
+				value = stackpage[pointerkey.value]
+				pointerkey.value -= 1
 
-				#include attenuate here?
-			elif symbol == "d":
-				# Make this also a 'm' message?
-				# Create new domain
-				keylistkey = keys[D_WORKBENCH2]
-				wb2 = self.get_keylist(keylistkey)
-				domainkey = self.create_domain(wb2[0], wb2[1], wb2[2], keylistkey)
-				wb1 = self.get_keylist(keys[D_WORKBENCH])
-				wb1[data[pointer]] = domainkey
-
-			elif symbol == "f":
-				keys[D_WORKBENCH], keys[D_WORKBENCH2] = keys[D_WORKBENCH2], keys[D_WORKBENCH]
-
-			elif symbol == "a":
-				# Attenuate key
-				# how to weaken meter key by certain amount? if CELLSIZE=256, this might suck
-				# attenuate in place or by copy/transfer?
-				# for now, in place
-				wb = self.get_keylist(keys[D_WORKBENCH2])
-				indices = data[pointer]
-				wbi = ((indices >> 4) & 0xf)
-				option = (indices & 0xf)
-
-				key = wb[wbi]
-
-				if key is not None:
-					wb[wbi] = key.attenuate(option)
-				else:
-					raise AssertionError("FUCK")
-
-			elif symbol == "m":
-				"""send message/key to domain"""
-				# use "m" to communicate with system? or separate instruction?
-				# system invocations (and their effects) have to obey resource constraints
-				# SystemKey? Available anywhere? Like complete memory override? Or only local, relative effects?
-				messagekeylistkey = keys[data[pointer]]
-				messagekeylist = self.get_keylist(messagekeylistkey)
-				domainkey = messagekeylist[0]
-				if domainkey is None:
-					print("System call")
-					pass
-				else:
-					print(chain[0])
-					receiver = self.get_domain(domainkey)
-
-					# use D_WORKBENCH2 as D_INBOX!, also as outbox?
-					#		keys[D_INBOX] = vm.create_keylist()
-					# Allow sending only one key? or entire workbench? copy or allow access to keylistkey?
-					# Allow empty message? -> Empty workbench
-					receiverkeys = self.get_keylist(receiver.keylistkey)
-					receiverkeys[D_WORKBENCH2] = keys[D_WORKBENCH2]
-					print("SENDING")
-					current = receiver
-
-			elif symbol == "h":
-				"""halt"""
-				break
-
-			elif symbol == "p":
-				"""create page"""
-				# only on empty keyslot?
-				slotindex, meterkeyindex = split(data[pointer])
-				if keys[slotindex] is None:
-					keys[slotindex] = self.create_page(keys[meterkeyindex])
-				else:
-					#???
-					pass
+			def popn(n):
 				pass
 
+			def push():
+				if pointerkey.value + 1 > len(stackpage):
+					raise Exception("StackOverflow")
+				value = stackpage[pointerkey.value]
+				pointerkey.value -= 1
+
+
+			def pushn():
+				pass
+
+			if I == I_PUSH:
+				arg = codearg()
+
+
+
 			if not jump:
-				ipkey.value += 1
+				ipkey.value += 1 + reqs[R_CARGS]
