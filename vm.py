@@ -1,42 +1,5 @@
 CELLSIZE = 256
-KEYLISTLEN = 16
 MK_PARENT, MK_CONTROLLER, MK_RESOURCES = range(3)
-PAGESIZE = 256
-
-SYMBOLS = "h><+-[]²½rtlcdfamsp"
-
-def translate(code):
-	return [SYMBOLS.index(c) for c in code]
-
-from random import choice
-
-def genrandom(length=256):
-	code = ""
-	for i in range(length):
-		code += choice(SYMBOLS)
-	return code
-
-class KeyList:
-	def __init__(self):
-		self.data = [None for i in range(KEYLISTLEN)]
-
-	def __setitem__(self, key, value):
-		# TODO allow ints? DataKey?
-		assert isinstance(value, Key), type(value)
-		if self.data[key] is not None:
-			#del self.data[key]#this actually deletes list entry!
-			self.__delitem__(key)
-		self.data[key] = value
-
-	def __getitem__(self, key):
-		return self.data[key]
-
-	def __delitem__(self, key):
-		self.data[key].refs -= 1
-		self.data[key] = None
-
-	def __iter__(self):
-		return iter(self.data)
 
 class Key:
 	def __init__(self, value):
@@ -62,14 +25,6 @@ class PageReadKey(Key):
 class DomainKey(Key):
 	pass
 
-class KeyListKey(Key):
-	# def __setattr__(self, name, value):
-	#	if name == "refs":
-	# delete corresponding keylist? or really only if meter is deleted?
-	# -> keylist could reference itself, so prob yeah, since only meters are guaranteed to be hierarchical
-	# should meter key grant access to everything?
-	pass
-
 # Parent meter, controlling domain, resources
 class MeterKey(Key):
 	def use(self, amount):
@@ -85,10 +40,13 @@ class MeterKey(Key):
 		else:
 			return MeterKey([self, self.value[1], self.value[MK_RESOURCES]//option])
 
+PG_DATA, PG_KEYS = range(2)
+
 class Page:
-	def __init__(self, parentmeter):
+	def __init__(self, type, parentmeter, pagesize):
+		self.type = type
 		self.meter = parentmeter
-		self.data = [0 for i in range(PAGESIZE)]
+		self.data = [0 for i in range(pagesize)]
 
 	def __getitem__(self, key):
 		return self.data[key]
@@ -97,7 +55,13 @@ class Page:
 		#TODO Check if writer has PageKey (not PageReadKey)
 		#Create something like PageContext?
 		#Cache it?
-		self.data[key] = value
+		if self.type == PG_DATA:
+			if isinstance(value, int):
+				self.data[key] = value
+		elif self.type == PG_KEYS:
+			if isinstance(value, Key):
+				self.data[key] = value
+
 
 	def read(self, key, value):
 		self[key] = value
@@ -105,43 +69,19 @@ class Page:
 	def __len__(self):
 		return len(self.data)
 
-def split(bits):
-	"""splits an 8 bit value into two 4 bit values"""
-	a = ((bits >> 4) & 0xf)
-	b = (bits & 0xf)
-	return a,b
+	def __iter__(self):
+		return iter(self.data)
 
-DK_STATE, DK_TIME, DK_MEMORY, DK_IP, DK_CODE, DK_POINTER, DK_STACK, DK_DATA, DK_WORKBENCH, DK_WORKBENCH2 = range(10)
+DOMAINFIELDS = 10
+D_STATE, D_TIME, D_MEMORY, D_IP, D_CODE, D_POINTER, D_STACK, D_DATA, D_WORKBENCH, D_WORKBENCH2 = range(DOMAINFIELDS)
 DS_ACTIVE, DS_WAITING = range(2)
-
-class Domain:
-	def __init__(self, vm, keylistkey, time_meter_key, memory_meter_key, codepagekey, stackpagekey, datapagekey):
-		self.keylistkey = keylistkey
-
-		keys = vm.get_keylist(self.keylistkey)
-		keys[DK_STATE] = Key(0)#STATE
-		keys[DK_TIME] = time_meter_key
-		keys[DK_MEMORY] = memory_meter_key
-		keys[DK_IP] = Key(0)#IP
-		keys[DK_CODE] = codepagekey
-		keys[DK_POINTER] = Key(0)#POINTER
-		keys[DK_STACK] = stackpagekey
-		keys[DK_DATA] = datapagekey
-		keys[DK_WORKBENCH] = self.keylistkey
-		keys[DK_WORKBENCH2] = self.keylistkey
-
-	def associated(self, vm, keyindex):
-		keys = vm.get_keylist(self.keylistkey)
-		return keys[keyindex]
 
 class KeyVM:
 	def __init__(self, timelimit=-1, memorylimit=-1):
 		self.ids = 0
-		self.keylists = {}
-		self.domains = {}
-		self.pages = {}
 		self.prime_time_meter = MeterKey([None, None, timelimit])
 		self.prime_memory_meter = MeterKey([None, None, memorylimit])
+		self.pages = {}
 
 	def __repr__(self):
 		return f"Time: {self.prime_time_meter.value[2]}\tMemory:{self.prime_memory_meter.value[2]}\tKeylists:{len(self.keylists)}\tDomains:{len(self.domains)}\tPages:{len(self.pages)}"
@@ -151,21 +91,11 @@ class KeyVM:
 		self.ids += 1
 		return self.ids
 
-	def create_keylist(self):#TODO memory_meter_key
-		keylist = KeyList()
-		keylistkey = KeyListKey(self.create_id())
-		self.keylists[keylistkey.value] = keylist
-		return keylistkey
-
-	def get_keylist(self, keylistkey):
-		assert isinstance(keylistkey, KeyListKey), type(keylistkey)
-		return self.keylists[keylistkey.value]
-
-	def create_page(self, memory_meter_key):
-		if not memory_meter_key.use(PAGESIZE):
+	def create_page(self, type, memory_meter_key, pagesize):
+		if not memory_meter_key.use(pagesize):
 			raise AssertionError("NOT IMPLEMENTED")
 			return None
-		page = Page(memory_meter_key)
+		page = Page(type, memory_meter_key, pagesize)
 		pagekey = PageKey(self.create_id())
 		self.pages[pagekey.value] = page
 		return pagekey
@@ -174,69 +104,31 @@ class KeyVM:
 		assert isinstance(pagekey, PageKey)
 		return self.pages[pagekey.value]
 
-	def create_domain(self, time_meter_key, memory_meter_key, codepagekey, datapagekey=None, stackpagekey=None, keylistkey=None):
-		if keylistkey is None:
-			keylistkey = self.create_keylist()#masterkey
+	def domainkey_from_code(code):
+		domainkey = vm.create_page(PG_KEYS, vm.prime_memory_meter, DOMAINFIELDS)
+		domainpage = vm.get_page(domainkey)
 
+		domainpage[D_STATE] = Key(0)
+		domainpage[D_TIME] = time_meter_key
+		domainpage[D_MEMORY] = memory_meter_key
+		domainpage[D_IP] = Key(0)
 
-		datapagekey = self.create_page(memory_meter_key)
+		codepagekey = vm.create_page(PG_DATA, vm.prime_memory_meter, len(code))
+		self.copycode(codepagekey, code)
+		domainpage[D_CODE] = codepagekey
 
-		#TODO if codepagekey is None or datapagekey is None, revert
+		domainpage[D_POINTER] = Key(0)
 
-		domain = Domain(self, keylistkey, time_meter_key, memory_meter_key, codepagekey, datapagekey)
-		domainkey = DomainKey(self.create_id())
-		self.domains[domainkey.value] = domain
-		# set domain bit on keylist datastructure
+		stackpagekey = vm.create_page(PG_DATA, vm.prime_memory_meter, 256)
+		domainpage[D_STACK] = stackpagekey
+
+		datapagekey = vm.create_page(PG_DATA, vm.prime_memory_meter, 256)
+		domainpage[D_DATA] = datapagekey
+
+		domainpage[D_WORKBENCH] = domainkey
+		domainpage[D_WORKBENCH2] = domainkey
+
 		return domainkey
-
-	def get_domain(self, domainkey):
-		assert isinstance(domainkey, DomainKey)
-		return self.domains[domainkey.value]
-
-	def viz(self, keylistkey, depth=0, visited=None):
-		if visited is None:
-			visited = [keylistkey]
-		keylist = self.get_keylist(keylistkey)
-		prefix = "\t"*depth
-		print(prefix + "KeyList", keylistkey.value)
-		for key in keylist:
-			print(prefix + "|" + str(key))#str(key.__class__))#
-			if isinstance(key, KeyListKey) and key not in visited:
-				visited.append(key)
-				self.viz(key, depth+1, visited)
-			elif isinstance(key, DomainKey):
-				domain = self.get_domain(key)
-				# Prevent visualizing domain keylist twice
-				if domain.keylistkey not in visited:
-					visited.append(domain.keylistkey)
-					self.viz(domain.keylistkey, depth+1, visited)
-
-	def gviz(self):
-		import pandas as pd
-		import numpy as np
-		import networkx as nx
-		import matplotlib.pyplot as plt
-		fm = []
-		to = []
-		color = []
-		for klid, keylist in self.keylists.items():
-			for key in keylist:
-				if key is None:
-					continue
-				fm.append(key)
-				to.append(klid)
-				color.append("black")
-				if isinstance(key, KeyListKey):
-					# this should be a different color at least
-					fm.append(key)
-					to.append(key.value)
-					color.append("red")
-		df = pd.DataFrame({ 'source':fm, 'target':to, 'color':color})
-		G=nx.from_pandas_edgelist(df, create_using=nx.DiGraph(), edge_attr=True)
-		nx.spring_layout(G)
-		nx.draw(G, with_labels=True, node_size=1500, alpha=0.3, arrows=True)#.values)
-		plt.show()
-
 
 	def copycode(self, codepagekey, code):
 		codepage = self.get_page(codepagekey)
@@ -244,11 +136,13 @@ class KeyVM:
 		for i in range(len(code)):
 			codepage[i] = code[i]
 
-	def run(self, domainkey, debug=False):
+	def run(self, code, debug=False):
+		domainkey = self.domainkey_from_code(code)
+		self.run_domainkey(domainkey)
 
-		current = self.get_domain(domainkey)
+	def run_domainkey(self, domainkey, debug=False):
 
-		while True:#current.associated(self, DK_STATE).value == DS_ACTIVE:
+		while True:#current.associated(self, D_STATE).value == DS_ACTIVE:
 			# do a step
 			# Ascend the meter chain
 			print(self)
@@ -258,7 +152,7 @@ class KeyVM:
 
 			keys = self.get_keylist(current.keylistkey)
 
-			timekey = keys[DK_TIME]
+			timekey = keys[D_TIME]
 			chain = [timekey]
 
 			if debug:
@@ -285,8 +179,8 @@ class KeyVM:
 				meterkey.value[MK_RESOURCES] -= STEPCOST
 
 
-			codepage = self.get_page(keys[DK_CODE])
-			ipkey = keys[DK_IP]
+			codepage = self.get_page(keys[D_CODE])
+			ipkey = keys[D_IP]
 			ip = ipkey.value
 
 			if ip >= len(codepage):
@@ -297,12 +191,12 @@ class KeyVM:
 
 			instruction = codepage[ip]
 
-			stackpage = self.get_page(keys[DK_STACK])
+			stackpage = self.get_page(keys[D_STACK])
 
-			pointerkey = keys[DK_POINTER]
+			pointerkey = keys[D_POINTER]
 			pointer = pointerkey.value
 
-			data = self.get_page(keys[DK_DATA])
+			data = self.get_page(keys[D_DATA])
 
 			#print(data.data)
 
@@ -316,26 +210,26 @@ class KeyVM:
 
 			elif symbol == "r":
 				# root, reset workbench to domain keylistkey
-				keys[DK_WORKBENCH] = current.keylistkey
+				keys[D_WORKBENCH] = current.keylistkey
 
 			elif symbol == "t":
 				# Traverse workbench down
 				assert data[pointer] < 16
 				key = keys[data[pointer]]
 				assert isinstance(key, KeyListKey)
-				keys[DK_WORKBENCH] = key
+				keys[D_WORKBENCH] = key
 
 			elif symbol == "l":
 				# Create new KeyList in workbench
 				assert data[pointer] < 16
 				newkeylistkey = self.create_keylist()
-				wb = self.get_keylist(keys[DK_WORKBENCH])
+				wb = self.get_keylist(keys[D_WORKBENCH])
 				wb[data[pointer]] = newkeylistkey
 
 			elif symbol == "c":
 				# Copy key
-				wb1 = self.get_keylist(keys[DK_WORKBENCH])
-				wb2 = self.get_keylist(keys[DK_WORKBENCH2])
+				wb1 = self.get_keylist(keys[D_WORKBENCH])
+				wb2 = self.get_keylist(keys[D_WORKBENCH2])
 
 				indices = data[pointer]
 				wb1i, wb2i = split(indices)
@@ -346,21 +240,21 @@ class KeyVM:
 			elif symbol == "d":
 				# Make this also a 'm' message?
 				# Create new domain
-				keylistkey = keys[DK_WORKBENCH2]
+				keylistkey = keys[D_WORKBENCH2]
 				wb2 = self.get_keylist(keylistkey)
 				domainkey = self.create_domain(wb2[0], wb2[1], wb2[2], keylistkey)
-				wb1 = self.get_keylist(keys[DK_WORKBENCH])
+				wb1 = self.get_keylist(keys[D_WORKBENCH])
 				wb1[data[pointer]] = domainkey
 
 			elif symbol == "f":
-				keys[DK_WORKBENCH], keys[DK_WORKBENCH2] = keys[DK_WORKBENCH2], keys[DK_WORKBENCH]
+				keys[D_WORKBENCH], keys[D_WORKBENCH2] = keys[D_WORKBENCH2], keys[D_WORKBENCH]
 
 			elif symbol == "a":
 				# Attenuate key
 				# how to weaken meter key by certain amount? if CELLSIZE=256, this might suck
 				# attenuate in place or by copy/transfer?
 				# for now, in place
-				wb = self.get_keylist(keys[DK_WORKBENCH2])
+				wb = self.get_keylist(keys[D_WORKBENCH2])
 				indices = data[pointer]
 				wbi = ((indices >> 4) & 0xf)
 				option = (indices & 0xf)
@@ -387,12 +281,12 @@ class KeyVM:
 					print(chain[0])
 					receiver = self.get_domain(domainkey)
 
-					# use DK_WORKBENCH2 as DK_INBOX!, also as outbox?
-					#		keys[DK_INBOX] = vm.create_keylist()
+					# use D_WORKBENCH2 as D_INBOX!, also as outbox?
+					#		keys[D_INBOX] = vm.create_keylist()
 					# Allow sending only one key? or entire workbench? copy or allow access to keylistkey?
 					# Allow empty message? -> Empty workbench
 					receiverkeys = self.get_keylist(receiver.keylistkey)
-					receiverkeys[DK_WORKBENCH2] = keys[DK_WORKBENCH2]
+					receiverkeys[D_WORKBENCH2] = keys[D_WORKBENCH2]
 					print("SENDING")
 					current = receiver
 
