@@ -4,4 +4,10 @@ from instructions import *
 code = [I_PUSH, 1, I_PUSH, 2, I_ADD]
 
 vm = KeyVM()
-vm.run_code(code)
+image = vm.run_code(code)
+
+#print(image)
+import zlib
+compressed = zlib.compress(image)
+#print(compressed)
+print(len(image), len(compressed))

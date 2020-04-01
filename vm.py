@@ -50,7 +50,7 @@ class Page:
 	def __init__(self, type, parentmeter, pagesize):
 		self.type = type
 		self.meter = parentmeter
-		self.data = [0 for i in range(pagesize)]
+		self.data = [None for i in range(pagesize)]
 
 	def __getitem__(self, key):
 		return self.data[key]
@@ -59,16 +59,19 @@ class Page:
 		#TODO Check if writer has PageKey (not PageReadKey)
 		#Create something like PageContext?
 		#Cache it?
-		if self.type == PG_DATA:
-			if isinstance(value, int):
-				self.data[key] = value
-		elif self.type == PG_KEYS:
-			if isinstance(value, Key):
-				self.data[key] = value
+		if self.type == PG_DATA and isinstance(value, int):
+			self.data[key] = value
+		elif self.type == PG_KEYS and isinstance(value, Key):
+			self.data[key] = value
+		else:
+			raise ValueError()
 
 
 	def read(self, key, value):
 		self[key] = value
+
+	def __repr__(self):
+		return str(self.data)
 
 	def __len__(self):
 		return len(self.data)
@@ -244,16 +247,25 @@ class KeyVM:
 				if pointerkey.value == 0:
 					raise Exception("StackUnderflow")
 				value = stackpage[pointerkey.value]
+				stackpage[pointerkey.value] = 0
 				pointerkey.value -= 1
 
 			def popn(n):
-				pass
+				if pointerkey.value < n:
+					raise Exception("StackUnderflow")
+				values = []
+				for index in range(pointerkey.value-1, pointerkey.value-n-1, -1):
+					values.append(stackpage[index])
+					stackpage[index] = 0
+					print(index)
+				pointerkey.value -= n
+				return values
 
-			def push():
-				if pointerkey.value + 1 > len(stackpage):
+			def push(v):
+				if pointerkey.value + 1 >= len(stackpage):
 					raise Exception("StackOverflow")
-				value = stackpage[pointerkey.value]
-				pointerkey.value -= 1
+				stackpage[pointerkey.value] = v
+				pointerkey.value += 1
 
 
 			def pushn():
@@ -261,8 +273,12 @@ class KeyVM:
 
 			if I == I_PUSH:
 				arg = codearg()
+				push(arg)
 
+			elif I == I_ADD:
+				a,b = popn(2)
 
+			print("Stack:", stackpage[:pointerkey.value])
 
 			if not jump:
 				ipkey.value += 1 + reqs[R_CARGS]
