@@ -20,8 +20,8 @@ REQUIREMENTS = {
     I_JUMPIF: [0],
 }
 
-DOMAINFIELDS = 9
-D_SELF, D_STATE, D_TIME, D_MEMORY, D_IP, D_CODE, D_POINTER, D_STACK, D_DATA = range(DOMAINFIELDS)
+DOMAINFIELDS = 10
+D_SELF, D_STATE, D_TIME, D_MEMORY, D_IP, D_CODE, D_POINTER, D_STACK, D_DATA, D_RECV = range(DOMAINFIELDS)
 DS_ACTIVE, DS_WAITING = range(2)#ommit these? global active index in image?
 
 # Key attenuation options

@@ -335,6 +335,15 @@ class KeyVM:
 					ipkey.value = jumptarget
 					jump = True
 
+			elif I == I_CALL:
+				targetdomainkeyindex, transferkeyindex = popn(2)
+				targetdomainkey = domainpage[domainkeyindex]
+				targetdomain = self.get_page(targetdomainkey)
+				transferkey = domainpage[transferkeyindex]
+				targetdomain[D_RECV] = transferkey
+				self.active = targetdomainkey
+				current = self.active
+
 			print("Stack:", stackpage[:pointerkey.value])
 
 			if not jump:
