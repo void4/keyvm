@@ -1,6 +1,6 @@
 from main import KeyVM
 
-vm = KeyFuck()
+vm = KeyVM()
 page1key = vm.create_page(vm.prime_memory_meter)
 page2key = vm.create_page(vm.prime_memory_meter)
 page3key = vm.create_page(vm.prime_memory_meter)
