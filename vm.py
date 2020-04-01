@@ -313,6 +313,13 @@ class KeyVM:
 				page = self.get_page(domainpage[targetindex])
 				page.resize(size)
 
+			elif I == I_COPYKEY:
+				targetpagekeyindex, targetpageindex, sourcepagekeyindex, sourcepageindex = popn(4)
+				sourcepage = self.get_page(domainpage[sourcepagekeyindex])
+				key = sourcepage[sourcepageindex]
+				targetpage = self.get_page(domainpage[targetpagekeyindex])
+				targetpage[targetpageindex] = key
+
 			print("Stack:", stackpage[:pointerkey.value])
 
 			if not jump:
