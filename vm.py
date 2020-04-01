@@ -21,12 +21,11 @@ class Key:
 		return self
 
 class PageKey(Key):
-	pass
+	def attenuate(self, option=None):
+		if option == A_READ:
+			return PageReadKey(self.value)
 
 class PageReadKey(Key):
-	pass
-
-class DomainKey(Key):
 	pass
 
 # Parent meter, controlling domain, resources
@@ -40,7 +39,7 @@ class MeterKey(Key):
 
 	def attenuate(self, option):
 		if option == 0:
-			return self
+			return self#still return copy?
 		else:
 			return MeterKey([self, self.value[1], self.value[MK_RESOURCES]//option])
 
@@ -316,6 +315,14 @@ class KeyVM:
 				key = sourcepage[sourcepageindex]
 				targetpage = self.get_page(domainpage[targetpagekeyindex])
 				targetpage[targetpageindex] = key
+
+			elif I == I_ATTENUATE:
+				targetpagekeyindex, targetpageindex, sourcepagekeyindex, sourcepageindex, type = popn(5)
+				sourcepage = self.get_page(domainpage[sourcepagekeyindex])
+				key = sourcepage[sourcepageindex]
+				targetpage = self.get_page(domainpage[targetpagekeyindex])
+				attenuated_key = key.attenuate(type)
+				targetpage[targetpageindex] = attenuated_key
 
 			print("Stack:", stackpage[:pointerkey.value])
 
