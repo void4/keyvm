@@ -232,8 +232,6 @@ class KeyVM:
 
 			jump = False
 
-			#		ipkey.value =
-			#		jump = True
 			"""
 			extend/change page size
 			getkey domainpage[targetindex] <- domainpage[keyindex]:keylistkey[secondaryindex]
@@ -323,6 +321,17 @@ class KeyVM:
 				targetpage = self.get_page(domainpage[targetpagekeyindex])
 				attenuated_key = key.attenuate(type)
 				targetpage[targetpageindex] = attenuated_key
+
+			elif I == I_JUMP:
+				jumptarget = pop()
+				ipkey.value = jumptarget
+				jump = True
+
+			elif I == I_JUMPIF:
+				jumptarget, condition = popn(2)
+				if condition:
+					ipkey.value = jumptarget
+					jump = True
 
 			print("Stack:", stackpage[:pointerkey.value])
 
