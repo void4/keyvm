@@ -49,8 +49,6 @@ class MeterKey(Key):
 		else:
 			return MeterKey(self.value//option, self)
 
-PG_DATA, PG_KEYS = range(2)
-
 class Page:
 	def __init__(self, type, parentmeter, size):
 		if not parentmeter.use(size):
@@ -59,6 +57,9 @@ class Page:
 		self.type = type
 		self.meter = parentmeter
 		self.data = [None for i in range(size)]
+
+	def __iter__(self):
+		return iter(self.data)
 
 class PageContext:
 	def __init__(self, page, option):
@@ -117,7 +118,22 @@ class KeyVM:
 		self.active = None#assume single-threaded
 
 	def __repr__(self):
-		return f"Time: {self.prime_time_meter.value}\tMemory:{self.prime_memory_meter.value}\tDomain:{len(self.get_page(self.active))}\tPages:{len(self.pages)}"
+		keypages = 0
+		datapages = 0
+		keys = 0
+		for pageid, page in self.pages.items():
+			if page.type == PG_KEYS:
+				keypages += 1
+				for field in page:
+					if field is not None:
+						keys += 1
+			else:
+				datapages += 1
+		a = f"Time: {self.prime_time_meter.value}\tMemory:{self.prime_memory_meter.value}\t"
+		b =	f"Domain:{len(self.get_page(self.active))}\tPages:{len(self.pages)}\t"
+		c =	f"DataPages:{datapages}\tKeyPages:{keypages}\tKeys:{keys}"
+
+		return a+b+c
 
 	def create_id(self):
 		#should use dict with globally unique id, in case pages get deleted

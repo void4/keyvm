@@ -33,3 +33,6 @@ S_ACTIVE, S_WAITING, S_ERROR = range(3)#omit these? global active index in image
 
 # Key attenuation options
 A_WRITE, A_READ = range(2)
+
+# Page types
+PG_DATA, PG_KEYS = range(2)
