@@ -54,42 +54,50 @@ class Page:
 		self.meter = parentmeter
 		self.data = [None for i in range(size)]
 
+class PageContext:
+	def __init__(self, page, option):
+		self.page = page
+		self.option = option
+
 	def resize(self, size):
-		if not self.meter.use(size):
+
+		if self.option != A_WRITE:
+			raise Exception("No write permissions on page")
+			return None
+
+		if not self.page.meter.use(size):
 			raise AssertionError("NOT IMPLEMENTED")
 			return None
 
-		if size < len(self):
-			self.data = self.data[:size]
+		if size < len(self.page.data):
+			self.page.data = self.page.data[:size]
 		else:
-			self.data += [0 for i in range(size-len(self))]
+			self.page.data += [0 for i in range(size-len(self.page.data))]
 
 	def __getitem__(self, key):
-		return self.data[key]
+		return self.page.data[key]
 
 	def __setitem__(self, key, value):
-		#TODO Check if writer has PageKey (not PageReadKey)
-		#Create something like PageContext?
-		#Cache it?
-		if self.type == PG_DATA and isinstance(value, int):
-			self.data[key] = value
-		elif self.type == PG_KEYS and isinstance(value, Key):
-			self.data[key] = value
+
+		if self.option != A_WRITE:
+			raise Exception("No write permissions on page")
+			return None
+
+		if self.page.type == PG_DATA and isinstance(value, int):
+			self.page.data[key] = value
+		elif self.page.type == PG_KEYS and isinstance(value, Key):
+			self.page.data[key] = value
 		else:
 			raise ValueError()
 
-
-	def read(self, key, value):
-		self[key] = value
-
 	def __repr__(self):
-		return str(self.data)
+		return str(self.page.data)
 
 	def __len__(self):
-		return len(self.data)
+		return len(self.page.data)
 
 	def __iter__(self):
-		return iter(self.data)
+		return iter(self.page.data)
 
 
 class KeyVM:
@@ -116,7 +124,14 @@ class KeyVM:
 
 	def get_page(self, pagekey):
 		assert isinstance(pagekey, PageKey)
-		return self.pages[pagekey.value]
+		page = self.pages[pagekey.value]
+		if isinstance(pagekey, PageReadKey):
+			option = A_READ
+		else:
+			option = A_WRITE
+
+		page_context = PageContext(page, option)
+		return page_context
 
 	def domainkey_from_code(self, code):
 		domainkey = self.create_page(PG_KEYS, self.prime_memory_meter, DOMAINFIELDS)
@@ -224,24 +239,11 @@ class KeyVM:
 
 			datapage = self.get_page(domainpage[D_DATA])
 
-			#print(data.data)
-
 			print(self, INSTRUCTIONNAMES[I])
 
 			reqs = REQUIREMENTS[I]
 
 			jump = False
-
-			"""
-			extend/change page size
-			getkey domainpage[targetindex] <- domainpage[keyindex]:keylistkey[secondaryindex]
-			putkey reverse of ^
-
-			pagecreate
-			pagetype: domainpage[keyindex] -> stack.push(page.type)
-			pagesize: domainpage[keyindex] -> stack.push(len(page))
-
-			"""
 
 			def codearg():
 				return codepage[ip+1]

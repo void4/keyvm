@@ -25,4 +25,4 @@ D_SELF, D_STATE, D_TIME, D_MEMORY, D_IP, D_CODE, D_POINTER, D_STACK, D_DATA = ra
 DS_ACTIVE, DS_WAITING = range(2)#ommit these? global active index in image?
 
 # Key attenuation options
-A_READ, _ = range(2)
+A_WRITE, A_READ = range(2)
