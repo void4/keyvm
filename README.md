@@ -6,16 +6,6 @@ https://keyvm.readthedocs.io
 
 https://esolangs.org/wiki/KeyVM
 
-## Installation
-
-`pip install -r requirements.txt`
-
-## Usage
-
-`python main.py`
-
-Tested with Python 3.8.2
-
 ## Notes
 
 This is a combination of:
