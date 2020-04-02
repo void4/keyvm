@@ -441,6 +441,23 @@ class KeyVM:
 						self.active = targetdomainkey
 						current = self.active
 
+				elif I == I_PAGEREAD:
+					sourcepagekeyindex, sourcepageindex = popn(2)
+					sourcepage = self.get_page(domainpage[sourcepagekeyindex])
+					if sourcepage.type != PG_DATA:
+						raise VMException("Trying to read from non-data page")
+						# XXX just skip?
+
+					push(sourcepage[sourcepageindex])
+
+				elif I == I_PAGEWRITE:
+					data, targetpagekeyindex, targetpageindex = popn(3)
+					targetpage = self.get_page(domainpage[targetpagekeyindex])
+					if targetpage.type != PG_DATA:
+						raise VMException("Trying to write to non-data page")
+						# XXX just skip?
+					targetpage[targetpageindex] = data
+
 				#print("Stack:", stackpage[:pointerkey.value])
 
 				if not jump:
