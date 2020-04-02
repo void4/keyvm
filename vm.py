@@ -49,6 +49,9 @@ class MeterKey(Key):
 		else:
 			return MeterKey(self.value//option, self)
 
+class SystemKey(Key):
+	pass
+
 class Page:
 	def __init__(self, type, parentmeter, size):
 		if not parentmeter.use(size):
@@ -114,6 +117,7 @@ class KeyVM:
 		self.ids = 0
 		self.prime_time_meter = MeterKey(-1, None)
 		self.prime_memory_meter = MeterKey(-1, None)
+		self.prime_system_key = SystemKey(0)
 		self.pages = {}
 		self.active = None#assume single-threaded
 
@@ -220,6 +224,9 @@ class KeyVM:
 
 		self.run_active()
 		return self.image()
+
+	def system_call(key):
+		pass
 
 	def run_active(self, debug=False):
 
@@ -423,13 +430,16 @@ class KeyVM:
 				elif I == I_CALL:
 					targetdomainkeyindex, transferkeyindex = popn(2)
 					targetdomainkey = domainpage[domainkeyindex]
-					targetdomain = self.get_page(targetdomainkey)
-					transferkey = domainpage[transferkeyindex]
-					targetdomain[D_STATE] = Key(S_ACTIVE)
-					targetdomain[D_RECV] = transferkey
-					# check if targetdomain is keypage!
-					self.active = targetdomainkey
-					current = self.active
+					if isinstance(targetdomainkey, SystemKey):
+						domainpage[D_RECV] = system_call(domainpage[transferkeyindex])
+					else:
+						targetdomain = self.get_page(targetdomainkey)
+						targetdomain[D_STATE] = Key(S_ACTIVE)
+						transferkey = domainpage[transferkeyindex]
+						targetdomain[D_RECV] = transferkey
+						# check if targetdomain is keypage!
+						self.active = targetdomainkey
+						current = self.active
 
 				#print("Stack:", stackpage[:pointerkey.value])
 
