@@ -4,6 +4,9 @@ from instructions import *
 
 CELLSIZE = 256
 
+class VMException(Exception):
+	pass
+
 class Key:
 	def __init__(self, value):
 		self.value = value
@@ -72,7 +75,7 @@ class PageContext:
 	def resize(self, size):
 
 		if self.option != A_WRITE:
-			raise Exception("No write permissions on page")
+			raise VMException("No write permissions on page")
 			return None
 
 		if not self.page.meter.use(size):
@@ -90,7 +93,7 @@ class PageContext:
 	def __setitem__(self, key, value):
 
 		if self.option != A_WRITE:
-			raise Exception("No write permissions on page")
+			raise VMException("No write permissions on page")
 			return None
 
 		if self.page.type == PG_DATA and isinstance(value, int):
@@ -108,9 +111,6 @@ class PageContext:
 
 	def __iter__(self):
 		return iter(self.page.data)
-
-class VMException(Exception):
-	pass
 
 class KeyVM:
 	def __init__(self):
