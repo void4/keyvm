@@ -361,9 +361,9 @@ class KeyVM:
 					push(a//b)
 
 				elif I == I_MOD:
+					a,b = popn(2)
 					if b == 0:
 						raise VMException("DivisionByZero")
-					a,b = popn(2)
 					push(a%b)
 
 				elif I == I_AND:

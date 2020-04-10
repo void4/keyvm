@@ -12,7 +12,23 @@ add(1,1)
 jump(:start)
 """
 
+genesis = """
+
+"""
+
 code = asm(code)
+
+sourcecode = """
+domain main:
+    def main() -> ():
+        a = 42
+
+"""
+
+
+from compiler import compile
+
+code = compile(sourcecode)
 
 print(code)
 
@@ -21,7 +37,7 @@ image = vm.run_code(code, 750)
 
 print("RESUME")
 
-vm = KeyVM()
+#vm = KeyVM()
 image = vm.run(image, 100)
 
 """
