@@ -1,0 +1,70 @@
+NAME: /\*?[a-zA-Z_]\w*/
+COMMENT: /#[^\n]*/
+_NEWLINE: ( /\r?\n[\t ]*/ | COMMENT)+
+
+_DEDENT: "<DEDENT>"
+_INDENT: "<INDENT>"
+
+%import common.ESCAPED_STRING
+string: ESCAPED_STRING
+
+number: DEC_NUMBER
+DEC_NUMBER: /0|[1-9]\d*/i
+
+%ignore /[\t \f]+/  // Whitespace
+
+start: (_NEWLINE | typedef | domaindef | importdef)*
+
+domaindef: "domain" funname ":" domainbody
+
+domainbody: _NEWLINE _INDENT funcdef+ _DEDENT _NEWLINE?
+
+tnpair: NAME NAME
+funcdef: "def" funname "(" [funparams] ")" ["->" "(" [funrets] ")"] ":" funcbody
+funcbody: suite
+funparams: tnpair ("," tnpair)*
+funrets: NAME ("," NAME)*
+
+importdef: "import" NAME _NEWLINE
+
+typedef: "typ" NAME "{" funparams "}" _NEWLINE
+
+?stmt: (simple_stmt | compound_stmt)
+suite: _NEWLINE _INDENT _NEWLINE? stmt+ _DEDENT _NEWLINE?
+
+compound_stmt: (if_stmt | while_stmt)
+if_stmt: "if" test ":" suite ["else" ":" suite]
+while_stmt: "while" [test] ":" suite
+
+
+?test: or_test
+?or_test: and_test ("or" and_test)*
+?and_test: not_test ("and" not_test)*
+?not_test: "not" not_test -> not
+| comparison
+?comparison: expr _comp_op expr
+!_comp_op: "==" | "!=" | "<" | "<=" | ">" | ">="
+
+simple_stmt: (assign | doreturn | funcall) _NEWLINE
+
+assign: NAME "=" expr
+doreturn: "return" expr
+
+?expr: arith_expr
+?arith_expr: term (_add_op term)*
+?term: factor (_mul_op factor)*
+?factor: _factor_op factor | molecule
+?molecule: funcall | atom | molecule "[" [expr] "]" -> getitem
+
+?atom: "[" listmaker "]" | tuple | attr | NAME | number | string
+listmaker: test ("," test)* [","]
+
+!_factor_op: "+"|"-"|"~"
+!_add_op: "+"|"-"
+!_mul_op: "*"|"/"|"%"
+
+funcall: funname "(" [funargs] ")"
+funname: NAME
+funargs: expr ("," expr)*
+tuple: [NAME] "{" [expr ("," expr)*] "}"
+attr: NAME "." NAME

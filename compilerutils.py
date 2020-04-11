@@ -1,27 +1,5 @@
 from lark import Tree
 
-class TraverseTopDown:
-    """Top-down visitor, recursive
-    Visits the tree, starting with the root and finally the leaves (top-down)
-    Calls its methods (provided by user via inheritance) according to tree.data
-    Unlike Transformer and Visitor, the Interpreter doesn't automatically visit its sub-branches.
-    The user has to explicitly call visit_children, or use the @visit_children_decor
-    """
-
-    def visit(self, tree, args=None):
-        f = getattr(self, tree.data)
-        return f(tree, args)
-
-    def visit_children(self, tree, args=None):
-        return [self.visit(child, args) if isinstance(child, Tree) else child
-                for child in tree.children]
-
-    def __getattr__(self, name):
-        return self.__default__
-
-    def __default__(self, tree, args=None):
-        return self.visit_children(tree, args)
-
 class L(list):
     def __new__(self, *args, **kwargs):
         return super(L, self).__new__(self, args, kwargs)

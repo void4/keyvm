@@ -1,4 +1,7 @@
 from lark import Lark, Tree, Transformer, Visitor, Token
+from lark.visitors import Transformer, Interpreter
+
+from vm import KeyVM
 
 from assembler import assemble, asm
 
@@ -6,95 +9,9 @@ from compilerutils import L, kahn, stringToWords, nametoint
 
 import os
 
-grammar = r"""
-NAME: /\*?[a-zA-Z_]\w*/
-COMMENT: /#[^\n]*/
-_NEWLINE: ( /\r?\n[\t ]*/ | COMMENT)+
-
-_DEDENT: "<DEDENT>"
-_INDENT: "<INDENT>"
-
-%import common.ESCAPED_STRING
-string: ESCAPED_STRING
-
-number: DEC_NUMBER
-DEC_NUMBER: /0|[1-9]\d*/i
-
-%ignore /[\t \f]+/  // Whitespace
-
-start: (_NEWLINE | typedef | domaindef | importdef)*
-
-domaindef: "domain" funname ":" domainbody
-
-domainbody: _NEWLINE _INDENT funcdef+ _DEDENT _NEWLINE?
-
-tnpair: NAME NAME
-funcdef: "def" funname "(" [funparams] ")" ["->" "(" [funrets] ")"] ":" funcbody
-funcbody: suite
-funparams: tnpair ("," tnpair)*
-funrets: NAME ("," NAME)*
-
-importdef: "import" NAME _NEWLINE
-
-typedef: "typ" NAME "{" funparams "}" _NEWLINE
-
-?stmt: (simple_stmt | compound_stmt)
-suite: _NEWLINE _INDENT _NEWLINE? stmt+ _DEDENT _NEWLINE?
-
-compound_stmt: (if_stmt | while_stmt)
-if_stmt: "if" test ":" suite ["else" ":" suite]
-while_stmt: "while" [test] ":" suite
-
-
-?test: or_test
-?or_test: and_test ("or" and_test)*
-?and_test: not_test ("and" not_test)*
-?not_test: "not" not_test -> not
-| comparison
-?comparison: expr _comp_op expr
-!_comp_op: "==" | "!=" | "<" | "<=" | ">" | ">="
-
-simple_stmt: (assign | run | doreturn | doyield | write_stmt | area_stmt | alloc_stmt | dealloc_stmt | funcall) _NEWLINE
-
-write_stmt: "$write" "(" expr "," expr ["," expr] ")"
-assign: NAME "=" expr
-run: "$run" "(" expr ")"
-doreturn: "return" expr
-doyield: "yield" //expr
-area_stmt: "$area"
-alloc_stmt: "$alloc" "(" expr ["," expr] ")"
-dealloc_stmt: "$dealloc" "(" expr ["," expr] ")"
-
-?expr: arith_expr
-?arith_expr: term (_add_op term)*
-?term: factor (_mul_op factor)*
-?factor: _factor_op factor | molecule
-?molecule: read | funcall | atom | arealen_expr | memorylen_expr | keyget_expr | funcname_expr |  molecule "[" [expr] "]" -> getitem
-
-read: "$read" "(" expr ["," expr] ")"
-
-?atom: "[" listmaker "]" | tuple | attr | NAME | number | string
-listmaker: test ("," test)* [","]
-
-arealen_expr: "$arealen" "(" expr ")"
-memorylen_expr: "$memorylen"
-keyget_expr: "$keyget" "(" expr ")"
-funcname_expr: "$funcname" "(" NAME ")"
-
-!_factor_op: "+"|"-"|"~"
-!_add_op: "+"|"-"
-!_mul_op: "*"|"/"|"%"
-
-funcall: funname "(" [funargs] ")"
-funname: NAME
-funargs: expr ("," expr)*
-tuple: [NAME] "{" [expr ("," expr)*] "}"
-attr: NAME "." NAME
-"""
-
 DEBUG = True
 
-l = Lark(grammar, debug=True)
+l = Lark(open("grammar.lark"), debug=True)
 
 def indent(line):
     return (len(line) - len(line.lstrip(' '))) // 4
@@ -144,18 +61,13 @@ class Generator:
     def name(self):
         return 'name:%i' % self.next()
 
-MEM_CODE = 0
-MEM_STACK = 1
-MEM_HEAP = 2
-MEM_IO = 3
-
 def compile_function(generator, types, domains, domainname, funcname):
 
     if DEBUG:
         print(f"Compiling function {domainname}:{funcname}")
 
     funcs = domains[domainname]
-    
+
     func = funcs[funcname]
     tree = func["body"]
     intypes = {name: typ for typ, name in func["in"]}
@@ -337,23 +249,6 @@ def compile_function(generator, types, domains, domainname, funcname):
 
         code = []
 
-        # Write return values from stack to memory
-        #for i in range(retlen):
-        #    # Current stack frame
-        #    code += asm("write(%i, add(read(%i,0),%i), rot2)" % (MEM_STACK, MEM_STACK, i))
-
-        # Push old return address to stack
-        code += asm("read(%i,sub(arealen(%i),1))" % (MEM_STACK, MEM_STACK))
-
-        # Push old stack frame address to stack
-        code += asm("read(%i,sub(arealen(%i),2))" % (MEM_STACK, MEM_STACK))
-
-        # Truncate area to current stack frame address
-        code += asm("dealloc(%i, sub(arealen(%i), read(%i,0)))" % (MEM_STACK, MEM_STACK, MEM_STACK))#sub , retlen
-
-        # Set old stack frame address again
-        code += asm("write(%i,0,rot2)" % (MEM_STACK))
-
         if funcname == "main":
             #code += asm("pop")
             #code += asm("dearea(0)")
@@ -371,15 +266,6 @@ def compile_function(generator, types, domains, domainname, funcname):
             code += asm("push(0)")
         code += coda()
         return code
-
-    """
-    MEM_STACK layout
-    0:0 - current stack frame address
-
-    expect: arg* |
-    create: arg* | ret* static* last_stack return_addr
-    destroy: arg* ret*
-    """
 
     # Generate code here?
     class TypeAnnotator(Transformer):
@@ -440,18 +326,6 @@ def compile_function(generator, types, domains, domainname, funcname):
 
             node.code += coda()
 
-            return node
-
-        def doyield(self,node):
-            node = L(node)
-            node.code = []
-            #node.code += pushExpr(node[0])
-            node.code += ["YIELD"]
-            return node
-
-        def area_stmt(self, node):
-            node = L(node)
-            node.code = ["AREA"]
             return node
 
         """
@@ -585,88 +459,6 @@ def compile_function(generator, types, domains, domainname, funcname):
             node.type = "u"
             return node
 
-        def write_stmt(self, node):
-            node = L(node)
-            node.code = []
-            leftType = getTypeSignature(node[0])
-
-            if leftType != "u":
-                abort("Cannot use non 'u' %s as index" % leftType, node[0])
-
-            if len(node) == 2:
-                abort("disabled write", node)
-                node.code += ["PUSH 0"]
-                node.code += pushExpr(node[0])
-            else:
-                middleType = getTypeSignature(node[1])
-                if middleType != "u":
-                    abort("Cannot use non 'u' %s as index" % middleType, node[1])
-                node.code += pushExpr(node[0])
-                node.code += pushExpr(node[1])
-            node.code += pushExpr(node[-1])
-            node.code += ["WRITE"]
-            return node
-
-        def alloc_stmt(self, node):
-            node = L(node)
-            node.code = []
-            leftType = getTypeSignature(node[0])
-
-            if leftType != "u":
-                abort("Cannot use non 'u' %s as index to alloc" % leftType, node[0])
-
-            if len(node) == 1:
-                node.code += ["PUSH 0"]
-                node.code += pushExpr(node[0])
-            else:
-                rightType = getTypeSignature(node[1])
-                if rightType != "u":
-                    abort("Cannot use non 'u' %s as size to alloc" % rightType, node[1])
-                node.code += pushExpr(node[0])
-                node.code += pushExpr(node[1])
-            node.code += ["ALLOC"]
-            return node
-
-        def dealloc_stmt(self, node):
-            node = L(node)
-            node.code = []
-            leftType = getTypeSignature(node[0])
-
-            if leftType != "u":
-                abort("Cannot use non 'u' %s as index to dealloc" % leftType, node[0])
-
-            if len(node) == 1:
-                node.code += ["PUSH 0"]
-                node.code += pushExpr(node[0])
-            else:
-                rightType = getTypeSignature(node[1])
-                if rightType != "u":
-                    abort("Cannot use non 'u' %s as size to dealloc" % rightType, node[1])
-                node.code += pushExpr(node[0])
-                node.code += pushExpr(node[1])
-            node.code += ["DEALLOC"]
-            return node
-
-        def arealen_expr(self, node):
-            node = L(node)
-            node.type ="u"
-            leftType = getTypeSignature(node[0])
-            if leftType != "u":
-                abort("Cannot use non 'u' %s as index to arealen" % leftType, node[0])
-            node.code = pushExpr(node[0])
-            node.code += ["AREALEN"]
-            return node
-
-        def keyget_expr(self, node):
-            node = L(node)
-            node.type = "u"
-            leftType = getTypeSignature(node[0])
-            if leftType != "u":
-                abort("Cannot use non 'u' %s as index to keyget" % leftType, node[0])
-            node.code = pushExpr(node[0])
-            node.code += ["KEYGET"]
-            return node
-
         def memorylen_expr(self, node):
             node = L(node)
             node.type = "u"
@@ -785,13 +577,6 @@ def compile_function(generator, types, domains, domainname, funcname):
             node.type = ["u"] * len(node)
             return node
 
-        def run(self, node):
-            node = L(node)
-            #node.code = asm("push(99999999999,99999999999)")
-            node.code = pushExpr(node[0])
-            node.code += ["RUN"]
-            return node
-
         def attr(self, node):
             if not hasType(node[0].value):
                 abort("Name %s has no type" % node[0].value, node[0])
@@ -908,31 +693,30 @@ def abort(msg, node=None):
 def pairs(tree):
     return [[n.children[0].value,n.children[1].value] for n in tree.children]
 
-from compilerutils import TraverseTopDown
 from collections import defaultdict
 
 def compile(text, path=None):
 
-    class TypeGetter(TraverseTopDown):
-        def start(self, node, args):
+    class TypeGetter(Interpreter):
+        def start(self, node):
             print(node)
             self.visit_children(node)
             if DEBUG:
                 print("Collected type definitions and function signatures.")
 
-        def importdef(self, node, args):
+        def importdef(self, node):
             imports[node.children[0].value] = {}
 
-        def domaindef(self, node, args):
-            #print(node, dir(node))
-            domainname = node.children[0].children[0].value
-            self.visit_children(node, domainname)
+        def domaindef(self, node):
+            self.domainname = node.children[0].children[0].value
+            print("DOM", self.domainname)
+            self.visit_children(node)
 
-        def typedef(self, node, args):
+        def typedef(self, node):
             node = node.children
             types[node[0].value] = pairs(node[1])
 
-        def funcdef(self, node, args):
+        def funcdef(self, node):
             indef = getChildByName(node, "funparams")
             if indef is None:
                 indef = []
@@ -946,7 +730,7 @@ def compile(text, path=None):
                 outdef = [n.value for n in outdef.children]
 
 
-            domains[args][getChildByName(node, "funname").children[0].value] = {
+            domains[self.domainname][getChildByName(node, "funname").children[0].value] = {
                 "in":indef,
                 "out":outdef,
                 "body": getChildByName(node, "funcbody")}
@@ -1023,6 +807,8 @@ def compile(text, path=None):
         types[typename]["name"] = typename
 
     generator = Generator()
+
+    vm = KeyVM()
 
     hasmaindomain = False
     hasmainfunc = False
