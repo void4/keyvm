@@ -8,7 +8,7 @@ https://esolangs.org/wiki/KeyVM
 
 ## Quickstart
 
-Tested with Python 3.8.2
+Needs Python >3.6. Tested with Python 3.8.2
 
 ### Download
 

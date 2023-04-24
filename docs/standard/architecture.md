@@ -13,16 +13,16 @@ What makes this architecture unique is that it introduces a new concept - *(acce
 
 Everything in this architecture is derived from two types of objects:
 
-- Key: gives access to a page. It is *impossible* to read from or write to a page you don't have the key to. It works just like real, physical keys and locks.
+- Key: gives access to a Page. It is *impossible* to read from or write to a page you don't have the key to. It works just like real, physical keys and locks.
 - Page: there are two types: DataPages (a contiguous sequence of bytes, used to store code and data) and KeyPages (a list of keys), both of dynamic size.
 
-Because these keys can be copied and shared, more than one domain can have access to the same page, and which domain has which keys can change over time.
+Keys to an existing Page cannot be constructed out of nothing - they cannot be forged - only the creator of a page receives its key.
+
+Because keys can be copied and shared by those who already have them, more than one domain can have access to the same page, and which domain has which keys can change over time.
 
 Instead of sending data to another domain, you just send a copy of the key that allows it to access the page the data is contained in. Now, data is not the thing that matters, but the rights to it.
 
 Instead of a process, where every part of the program is allowed to access every other part, here a domain can construct a new domain, put some code into it and run it, with the complete assurance that it can only access the pages it was explicitly given access to - nothing else.
-
-This is a weird conceptual inversion or abstraction that can take some time to get used to. Since many concepts depend on each other it is difficult to write a description that never depends on later definitions. It is therefore useful to read the following several times.
 
 ### Domains
 
@@ -30,11 +30,12 @@ A domain is the KeyVM equivalent to a typical process.
 
 In contemporary programming languages a process has a fixed code and data memory attached to (only) it. Here, a process is just a list of keys called a *Domain*.
 
-It's just a KeyPage that contains Keys that point to other Pages that a process needs - the process code, data and stack as well as some more information (more at [Data Structures](datastructures.md)).
+It's just a KeyPage that contains Keys that point to other Pages that a process needs - the processes' code, data and stack as well as some more information (more at [Data Structures](datastructures.md)).
 
-Domains pass control to each other by invoking a DomainKey. A message contains only a single Key which is copied to the called domains' KeyPage. The called domain can then access the (indirectly) referred to pages with that key. This is the way data and rights are distributed throughout the system.
+A Domain can send other domains their DomainKey - a special key that allows others to send it a message.
 
-In this implementation, only one domain has control at a time (single-threaded architecture).
+Domains pass control to each other by invoking the CALL instruction with the DomainKey of the other domain and (optionally) another - a 'message' Key - which is copied to the called domains' KeyPage. The called Domain can then access everything (indirectly) referred to by key (a Page if it's a PageKey, or more keys if it's a KeyPageKey).
+In this implementation, only one domain is running at a time (single-threaded architecture).
 
 ### Meters
 
@@ -67,8 +68,8 @@ More info here:
 
 ### Special instructions
 
-The CREATE instruction is used to create a new process from one of the processes' memories. The creating process receives a key to the newly created process.
-
-The RECURSE instruction can be invoked to transfer control to another process image in the list. Each process is assigned resource limits: instruction steps/time ('gas') and a memory allocation limit and/or memory-time cost (cost per word per timestep).
-
-The TRANSFERKEY instruction can be used to give another process the right to call a process the current domain already has access to.
+| Instruction | Usage                                                                   |
+|-------------|-------------------------------------------------------------------------|
+| CREATEPAGE  | Creates a new page which the current domain receives a key to           |
+| CALL        | Transfers control to another Domain. Can include another key as message |
+| COPYKEY     | Copies an existing key to another slot in another KeyPage               |                                                                                                 |

@@ -15,7 +15,6 @@ Welcome to KeyVM's documentation!
    usage/assembler
 
    standard/datastructures
-   standard/bytecode
    usage/API
 
 
