@@ -101,7 +101,7 @@ class PageContext:
 		elif self.page.type == PG_KEYS and isinstance(value, Key):
 			self.page.data[key] = value
 		else:
-			raise ValueError()
+			raise ValueError("Invalid write", self.page.type, value)
 
 	def __repr__(self):
 		return str(self.page.data)
@@ -171,6 +171,7 @@ class KeyVM:
 
 		domainpage[D_SELF] = domainkey
 
+		# TODO DANGER: if not checked datakeys could be misused for value as reference
 		domainpage[D_STATE] = Key(S_ACTIVE)
 		domainpage[D_TIME] = self.prime_time_meter
 		domainpage[D_MEMORY] = self.prime_memory_meter
@@ -226,6 +227,7 @@ class KeyVM:
 		return self.image()
 
 	def system_call(key):
+		# TODO must return key of some sort
 		pass
 
 	def run_active(self, debug=False):
@@ -298,7 +300,7 @@ class KeyVM:
 
 				datapage = self.get_page(domainpage[D_DATA])
 
-				print(self, ip, INSTRUCTIONNAMES[I], pointer)
+				print(str(self) + f"\tIP:{ip}\tINSTR:{INSTRUCTIONNAMES[I]}\tPNT:{pointer}")
 
 				reqs = REQUIREMENTS[I]
 
@@ -382,7 +384,7 @@ class KeyVM:
 					a = pop()
 					push(~a)
 
-				elif I == I_PAGECREATE:
+				elif I == I_CREATEPAGE:
 					targetindex, type, meterkeyindex, size = popn(4)
 					domainpage[targetindex] = self.create_page(type, domainpage[meterkeyindex], size)
 

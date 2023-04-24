@@ -3,7 +3,7 @@ from instructions import *
 from assembler import asm
 
 three = [I_PUSH, 1, I_PUSH, 2, I_ADD]
-pagecreate = [I_PUSH, D_SELF, I_PUSH, 10, I_PAGESIZESET, I_PUSH, 9, I_PUSH, 0, I_PUSH, D_MEMORY, I_PUSH, 42, I_PAGECREATE]
+pagecreate = [I_PUSH, D_SELF, I_PUSH, 10, I_PAGESIZESET, I_PUSH, 9, I_PUSH, 0, I_PUSH, D_MEMORY, I_PUSH, 42, I_CREATEPAGE]
 
 code = """
 add(1,0)
@@ -12,23 +12,7 @@ add(1,1)
 jump(:start)
 """
 
-genesis = """
-
-"""
-
 code = asm(code)
-
-sourcecode = """
-domain main:
-    def main() -> ():
-        a = 42
-
-"""
-
-
-from compiler import compile
-
-code = compile(sourcecode)
 
 print(code)
 
