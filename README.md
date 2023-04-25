@@ -20,7 +20,11 @@ Needs Python >3.6. Tested with Python 3.8.2
 
 ### Usage
 
-`python main.py`
+```
+python main.py examples/stackoverflow.ism --debug 
+
+python main.py examples/test.l --debug --sleep 0.1
+```
 
 ## Notes
 

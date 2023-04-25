@@ -1,0 +1,4 @@
+add(1,0)
+start:
+add(1,1)
+jump(:start)

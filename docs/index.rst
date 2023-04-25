@@ -8,8 +8,6 @@ Welcome to KeyVM's documentation!
    :maxdepth: 2
    :caption: Contents:
 
-   usage/quickstart
-
    standard/architecture
 
    usage/assembler

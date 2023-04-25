@@ -13,7 +13,8 @@
 
     <template v-if="jdata.length>0">
 
-        <div style="background-color: green;margin:10px;padding:10px;">
+        <button @click="showkeys=!showkeys">toggle show keys</button>
+        <div v-if="showkeys" style="background-color: green;margin:10px;padding:10px;">
             <div v-for="key in jdata[jindex].keys" style="background-color: lightgreen;padding:10px;border: 1px solid black;">
                 {{ key }}
             </div>
@@ -51,6 +52,7 @@ var app = new Vue({
         jdata: [],
         jindex: 0,
         jindexinput: 0,
+        showkeys: false,
         INSTRUCTIONNAMES: %% INSTRUCTIONNAMES|tojson %%,
     },
     methods: {

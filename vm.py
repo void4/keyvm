@@ -322,7 +322,7 @@ class KeyVM:
 		for i in range(len(code)):
 			codepage[i] = code[i]
 
-	def run_code(self, code, timelimit=None, memorylimit=None, stacksize=None, datasize=None, debug=False, opendebugger=False, debugsleep=None):
+	def run_code(self, code, timelimit=None, memorylimit=None, stacksize=None, datasize=None, debug=False, opendebugger=False, debugcomm=False, debugsleep=None):
 
 		if timelimit is not None:
 			self.prime_time_meter.value = timelimit
@@ -332,7 +332,7 @@ class KeyVM:
 
 		domainkey = self.domainkey_from_code(code, stacksize=stacksize, datasize=datasize)
 		self.active = domainkey
-		self.run_active(debug=debug, opendebugger=opendebugger, debugsleep=debugsleep)
+		self.run_active(debug=debug, opendebugger=opendebugger, debugcomm=debugcomm, debugsleep=debugsleep)
 		return self.image()
 
 	def image(self):
@@ -344,11 +344,11 @@ class KeyVM:
 			"pages": {pageid: page.dumps() for pageid, page in self.pages.items()},
 			"prime_memory_meter": self.prime_memory_meter.keyid,
 			"prime_time_meter": self.prime_time_meter.keyid,
-			"prime_system_key": self.prime_system_key.keyid,
+			"prime_system_key": noneid(self.prime_system_key),
 		}
 		return jdata
 
-	def run(self, image, timelimit=None, memorylimit=None, debug=False, opendebugger=False, debugsleep=None):
+	def run(self, image, timelimit=None, memorylimit=None, debug=False, opendebugger=False, debugcomm=False, debugsleep=None):
 		jdata = image
 		keys = jdata["keys"]
 		pages = jdata["pages"]
@@ -364,9 +364,16 @@ class KeyVM:
 		self.active = self.keys[jdata["active"]]
 		self.ids = jdata["ids"]
 
+		if debug:
+			print(self.keys)
+
 		self.prime_time_meter = self.keys[jdata["prime_time_meter"]]
 		self.prime_memory_meter = self.keys[jdata["prime_memory_meter"]]
-		self.prime_system_key = self.keys[jdata["prime_system_key"]]
+		try:
+			self.prime_system_key = self.keys[jdata["prime_system_key"]]
+		except KeyError:
+			# Looks like the domain threw its system key away. Oh well
+			self.prime_system_key = None
 
 		if timelimit is not None:
 			self.prime_time_meter.value = timelimit
@@ -374,7 +381,7 @@ class KeyVM:
 		if memorylimit is not None:
 			self.prime_memory_meter.value = memorylimit
 
-		self.run_active(debug=debug, opendebugger=opendebugger, debugsleep=debugsleep)
+		self.run_active(debug=debug, opendebugger=opendebugger, debugcomm=debugcomm, debugsleep=debugsleep)
 		return self.image()
 
 	def system_call(key):
@@ -386,12 +393,14 @@ class KeyVM:
 			pagecontext[index] = self.create_key(DataKey, value, comment=comment)
 		else:
 			pagecontext[index].value = value
-	def run_active(self, debug=False, opendebugger=False, debugsleep=None):
+	def run_active(self, debug=False, opendebugger=False, debugcomm=False, debugsleep=None):
 
 		sio = None
 		if debug:
 			if opendebugger:
 				start_visualizer()
+
+			if debugcomm:
 				sio = SocketIO(message_queue="redis://127.0.0.1:6379/0", use_reloader=False, debug=False)
 				sio.emit('broadcast', {'message': "{'status': 'VM connected'}"})
 
@@ -400,7 +409,8 @@ class KeyVM:
 		while True:#current.associated(self, D_STATE).value == S_ACTIVE:
 			# do a step
 			# Ascend the meter chain
-			print(self)
+			if debug:
+				print(self)
 			# TODO investigate this
 			if current is None:
 				break
@@ -451,7 +461,7 @@ class KeyVM:
 
 				if ip >= len(codepage):
 					# TODO move up
-					if timekey.value[MK_PARENT] is None:
+					if timekey.parent is None:
 						break
 					continue
 
