@@ -39,5 +39,5 @@ PG_DATA, PG_KEYS = range(2)
 
 # Put this into a separate file, since this is a higher level definition?
 DOMAINFIELDS = 10
-D_SELF, D_STATE, D_TIME, D_MEMORY, D_IP, D_CODE, D_POINTER, D_STACK, D_DATA, D_RECV = range(DOMAINFIELDS)
+D_TIME, D_MEMORY, D_SELF, D_STATE, D_IP, D_CODE, D_POINTER, D_STACK, D_DATA, D_RECV = range(DOMAINFIELDS)
 S_ACTIVE, S_WAITING, S_ERROR = range(3)#omit these? global active index in image?

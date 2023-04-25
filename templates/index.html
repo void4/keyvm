@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+
+<script src="/static/js/socket.io.js" integrity="sha512-q/dWJ3kcmjBLU4Qc47E4A9kTB4m3wuTY7vkFJDTZKjTs8jhyGQnaUrxa0Ytd0ssMZhbNua9hE+E7Qv1j+DyZwA==" crossorigin="anonymous"></script>
+<script src="/static/js/d3.v4.js"></script>
+<script src="/static/js/vue.js"></script>
+<div id="app">
+    {{ jdata.length }}
+    <button :disabled="jindex==0" @click="jindex-=1;jindexinput=jindex">-1</button>
+    <input type="number" @change="jindex=jindexinput" v-model="jindexinput" min="0">
+    <button :disabled="jdata.length==0 || jindex==jdata.length-1" @click="jindex+=1;jindexinput=jindex">+1</button>
+    <input ref="autoupdate" type="checkbox" checked>autoupdate</input>
+
+    <template v-if="jdata.length>0">
+
+        <div style="background-color: green;margin:10px;padding:10px;">
+            <div v-for="key in jdata[jindex].keys" style="background-color: lightgreen;padding:10px;border: 1px solid black;">
+                {{ key }}
+            </div>
+        </div>
+
+        <div v-for="(page, pageid) in jdata[jindex].pages" style="background-color:grey;margin:10px;padding:10px;">
+            <h3>{{ page.class }}({{ page.type }}) {{ pageid }}<template v-if="page.comment"> - {{ page.comment }}</template></h3>
+            <template v-if="page.type == 1">
+                <div v-for="key in page.data" style="background-color: blue;">
+                    <template v-if="key">
+                        {{ key }}
+                        {{ jdata[jindex].keys[key] }}
+                    </template>
+                </div>
+            </template>
+            <template v-else>
+                {{ page.data }}
+                <template v-if="page.disasm">
+                    <template v-for="opinfo in page.disasm">
+                        <span :style="{'background-color':opinfo.active ? 'green' : null}" style="margin-right: 5px;">
+                            <b>{{ opinfo.op }}</b> <span v-for="(arg, index) in opinfo.args">{{ arg }}<template v-if="index<opinfo.args.length-1">, </template></span>
+                        </span>
+                    </template>
+                </template>
+            </template>
+        </div>
+    </template>
+</div>
+<div id="my_dataviz"></div>
+<script type="text/javascript" charset="utf-8">
+
+var app = new Vue({
+    el: "#app",
+    data: {
+        jdata: [],
+        jindex: 0,
+        jindexinput: 0,
+        INSTRUCTIONNAMES: %% INSTRUCTIONNAMES|tojson %%,
+    },
+    methods: {
+
+    }
+});
+
+
+var socket = io(":8001");
+socket.on('connect', function() {
+    socket.emit('my event', {data: 'I\'m connected!'});
+});
+
+socket.on('broadcast', function(data) {
+    //console.log(data)
+    if (data.type != "update") {
+        return;
+    }
+    var jdata = JSON.parse(data.message.image)
+    //console.log("Received broadcast", jdata);
+    var network = {nodes: [], links: []}
+    for (var [pageid, page] of Object.entries(jdata.pages)) {
+        //console.log(pageid, page)
+        if (page === null) {
+            continue;
+        }
+        network.nodes.push({id: pageid, name: "Page"+pageid})
+        if (page.type == 1) {
+            for (var key of page.data) {
+                if (key === null) {
+                    continue;
+                }
+                if (key.class == "PageKey" && key.value in jdata.pages) {
+                    network.nodes.push({id: key.id, name: key.class + key.id})
+                    network.links.push({source: pageid, target: key.id})
+                    network.links.push({source: key.id, target: key.value})
+                }
+            }
+        }
+    }
+    redrawNetwork(network)
+    app.jdata.push(jdata)
+    if (app.$refs['autoupdate'].checked) {
+        app.jindex = app.jdata.length-1
+        app.jindexinput = app.jindex
+    }
+});
+
+// set the dimensions and margins of the graph
+var margin = {top: 10, right: 30, bottom: 30, left: 40},
+  width = 400 - margin.left - margin.right,
+  height = 400 - margin.top - margin.bottom;
+
+// append the svg object to the body of the page
+var svg = d3.select("#my_dataviz")
+.append("svg")
+  .attr("width", width + margin.left + margin.right)
+  .attr("height", height + margin.top + margin.bottom)
+.append("g")
+  .attr("transform",
+        "translate(" + margin.left + "," + margin.top + ")");
+
+function redrawNetwork(jdata) {
+
+    data = jdata
+
+  // Initialize the links
+  var link = svg
+    .selectAll("line")
+    .data(data.links)
+    .enter()
+    .append("line")
+      .style("stroke", "#aaa")
+
+  // Initialize the nodes
+  var node = svg
+    .selectAll("circle")
+    .data(data.nodes)
+    .enter()
+    .append("circle")
+      .attr("r", 20)
+      .style("fill", "#69b3a2");
+
+  var label = svg.selectAll(null)
+    .data(data.nodes)
+    .enter()
+    .append("text")
+    .text(function (d) { return d.name; })
+    .style("text-anchor", "middle")
+    .style("fill", "#555")
+    .style("font-family", "Arial")
+    .style("font-size", 12);
+
+/*
+  // Let's list the force we wanna apply on the network
+  var simulation = d3.forceSimulation(data.nodes)                 // Force algorithm is applied to data.nodes
+      .force("link", d3.forceLink()                               // This force provides links between nodes
+            .id(function(d) { return d.id; })                     // This provide  the id of a node
+            .links(data.links)                                    // and this the list of links
+      )
+      .force("charge", d3.forceManyBody().strength(-400))         // This adds repulsion between nodes. Play with the -400 for the repulsion strength
+      .force("center", d3.forceCenter(width / 2, height / 2))     // This force attracts nodes to the center of the svg area
+      .on("end", ticked);
+
+  // This function is run at each iteration of the force algorithm, updating the nodes position.
+  function ticked() {
+    link
+        .attr("x1", function(d) { return d.source.x; })
+        .attr("y1", function(d) { return d.source.y; })
+        .attr("x2", function(d) { return d.target.x; })
+        .attr("y2", function(d) { return d.target.y; });
+
+    node
+         .attr("cx", function (d) { return d.x+6; })
+         .attr("cy", function(d) { return d.y-6; });
+  }
+*/
+}
+
+</script>

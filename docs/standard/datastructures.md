@@ -12,7 +12,7 @@ A Domain is a KeyPage, with the following structure:
 | D_MEMORY  | MeterKey   | meter from which the domain draws memory                     |
 | D_IP      | DataKey    | current instruction pointer                                  |
 | D_CODE    | PageKey    | code the domain uses                                         |
-| D_POINTER | DataKey    |                                                              |
+| D_POINTER | DataKey    | points to the top of the stack                               |
 | D_STACK   | PageKey    | stack the domain uses for computation                        |
 | D_DATA    | PageKey    | data the domain uses                                         |
 | D_RECV    | ?          | optional, a key that points to data that has been sent to it |

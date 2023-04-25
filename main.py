@@ -16,13 +16,17 @@ code = asm(code)
 
 print(code)
 
+DEBUG = True
+OPENDEBUGGER = False
+DEBUGSLEEP = 0.1
+
 vm = KeyVM()
-image = vm.run_code(code, 750)
+image = vm.run_code(code, 750, stacksize=256, datasize=256, debug=DEBUG, opendebugger=OPENDEBUGGER, debugsleep=DEBUGSLEEP)
 
 print("RESUME")
 
 #vm = KeyVM()
-image = vm.run(image, 100)
+image = vm.run(image, 100, debug=DEBUG, opendebugger=OPENDEBUGGER, debugsleep=DEBUGSLEEP)
 
 """
 #print(image)
